@@ -74,10 +74,11 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
-    // CC:Tweaked — APIs at compile time, full mod at runtime.
+    // CC:Tweaked — full jar on the compile classpath too: the capture card reads
+    // monitor terminals through internal classes (MonitorBlockEntity, Terminal).
     compileOnly fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cc_version}")
     compileOnly fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cc_version}")
-    runtimeOnly fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-forge:${cc_version}")
+    implementation fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-forge:${cc_version}")
 }
 
 tasks.named('processResources', ProcessResources).configure {

@@ -1,8 +1,14 @@
 package gg.lakehouse.cctv;
 
 import com.mojang.logging.LogUtils;
-import dan200.computercraft.api.ComputerCraftAPI;
+import dan200.computercraft.api.ForgeComputerCraftAPI;
+import gg.lakehouse.cctv.capture.CaptureCardBlockEntity;
+import gg.lakehouse.cctv.network.PacketHandler;
+import gg.lakehouse.cctv.registry.ModRegistry;
+import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
 @Mod(CCTV.MOD_ID)
@@ -11,6 +17,18 @@ public final class CCTV {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public CCTV() {
-        LOGGER.info("CC:TV starting alongside {}", ComputerCraftAPI.MOD_ID);
+        var modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        ModRegistry.register(modBus);
+        PacketHandler.register();
+        modBus.addListener(this::commonSetup);
+    }
+
+    private void commonSetup(FMLCommonSetupEvent event) {
+        event.enqueueWork(() -> ForgeComputerCraftAPI.registerPeripheralProvider((level, pos, side) -> {
+            if (level.getBlockEntity(pos) instanceof CaptureCardBlockEntity captureCard) {
+                return LazyOptional.of(() -> captureCard.peripheral());
+            }
+            return LazyOptional.empty();
+        }));
     }
 }

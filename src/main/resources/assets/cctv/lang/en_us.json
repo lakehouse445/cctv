@@ -1,3 +1,4 @@
 {
-  "itemGroup.cctv": "CC:TV"
+  "itemGroup.cctv": "CC:TV",
+  "block.cctv.capture_card": "Capture Card"
 }

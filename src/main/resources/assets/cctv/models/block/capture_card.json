@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "front": "cctv:block/capture_card_front",
+    "side": "cctv:block/capture_card_side",
+    "top": "cctv:block/capture_card_top"
+  }
+}

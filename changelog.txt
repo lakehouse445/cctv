@@ -1,0 +1,38 @@
+0.2
+===
+ - 0.2.0  The capture card actually records and exports
+          Recording: point the capture card at any adjacent monitor (any of its six
+          sides). record() snapshots the monitor's full terminal - text, colours,
+          and per-recording 16-colour palette - at 1-20 fps, capped at 3000 frames.
+          Full frames only for now; the delta format from spec section 8 comes with
+          tapes. Recordings are held in memory and do not survive a chunk unload.
+          Export: GIF, rendered client-side with CC:T's own term_font atlas so text
+          looks right, written to <gameDir>/cctv-exports/rec_<timestamp>.gif with a
+          clickable chat link, like screenshots. Uses javax.imageio only; recordings
+          whose compressed payload exceeds ~800 KB refuse to export (packet cap).
+          GUI: placeholder screen on right-click - FPS cycle (1/2/5/10/20), Record,
+          Stop, Export GIF buttons plus live status; server pushes state updates.
+          Lua: record([fps]), stop(), isRecording(), getFrameCount() all work on the
+          capture_card peripheral; export() stays GUI-only until tapes land.
+          Internals: new cctv:main network channel (4 packets); CC:T's full jar is
+          now a compile dependency to read monitor terminals (MonitorBlockEntity,
+          ServerMonitor, Terminal).
+
+0.1
+===
+ - 0.1.1  Add the capture card block (screen recorder shell)
+          Craftable: smooth stone top/bottom rows, iron ingots left/right, redstone centre.
+          Horizontal facing block with a block entity; drops itself, pickaxe mineable,
+          lives in the new CC:TV creative tab.
+          Exposed as the "capture_card" peripheral via ForgeComputerCraftAPI:
+          isRecording() works (always false for now), record(source) and stop() are
+          stubs until the recorder lands.
+          Placeholder art borrowed from CC:Tweaked's disk drive textures
+          (capture_card_front/side/top).
+          Add build17.bat: builds with JDK 17 regardless of the Java on PATH.
+ - 0.1.0  Initial project scaffold
+          Forge 1.20.1-47.4.10, ForgeGradle 6, Gradle 8.8, CC:Tweaked 1.120.0 with a
+          [1.119.0,) runtime range (required); Simple Voice Chat optional.
+          Feature-first package tree under gg.lakehouse.cctv: registry, camera, capture,
+          tape, vcr, playback, microphone, media, export, network, client,
+          integration/voicechat.

@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "cctv:block/capture_card"},
+    "facing=east": {"model": "cctv:block/capture_card", "y": 90},
+    "facing=south": {"model": "cctv:block/capture_card", "y": 180},
+    "facing=west": {"model": "cctv:block/capture_card", "y": 270}
+  }
+}
