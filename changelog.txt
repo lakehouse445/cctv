@@ -1,8 +1,8 @@
 0.4
 ===
  - 0.4.2  Hold the tape like a VHS; written labels
-          First and third person each get their own hand-tuned viewmodel pose
-          (thanks Diane); the cassette is held up like you're reading the label.
+          First and third person each get their own hand-tuned viewmodel pose;
+          the cassette is held up like you're reading the label.
           Renaming a tape on an anvil writes the name on the white label sticker
           in black, auto-shrunk to fit, everywhere the 3D model shows (hand,
           item frames, ground) - so an evidence shelf of framed tapes actually
