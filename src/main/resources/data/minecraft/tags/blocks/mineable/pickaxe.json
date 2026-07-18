@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "cctv:capture_card"
+    "cctv:capture_card",
+    "cctv:microphone"
   ]
 }

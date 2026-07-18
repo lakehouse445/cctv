@@ -3,6 +3,7 @@ package gg.lakehouse.cctv;
 import com.mojang.logging.LogUtils;
 import dan200.computercraft.api.ForgeComputerCraftAPI;
 import gg.lakehouse.cctv.capture.CaptureCardBlockEntity;
+import gg.lakehouse.cctv.microphone.MicrophoneBlockEntity;
 import gg.lakehouse.cctv.network.PacketHandler;
 import gg.lakehouse.cctv.registry.ModRegistry;
 import net.minecraftforge.common.util.LazyOptional;
@@ -25,8 +26,12 @@ public final class CCTV {
 
     private void commonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> ForgeComputerCraftAPI.registerPeripheralProvider((level, pos, side) -> {
-            if (level.getBlockEntity(pos) instanceof CaptureCardBlockEntity captureCard) {
+            var blockEntity = level.getBlockEntity(pos);
+            if (blockEntity instanceof CaptureCardBlockEntity captureCard) {
                 return LazyOptional.of(() -> captureCard.peripheral());
+            }
+            if (blockEntity instanceof MicrophoneBlockEntity microphone) {
+                return LazyOptional.of(() -> microphone.peripheral());
             }
             return LazyOptional.empty();
         }));

@@ -69,6 +69,13 @@ repositories {
             includeGroup 'cc.tweaked'
         }
     }
+    maven {
+        name = 'henkelmax'
+        url = 'https://maven.maxhenkel.de/repository/public'
+        content {
+            includeGroup 'de.maxhenkel.voicechat'
+        }
+    }
 }
 
 dependencies {
@@ -79,6 +86,9 @@ dependencies {
     compileOnly fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cc_version}")
     compileOnly fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cc_version}")
     implementation fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-forge:${cc_version}")
+
+    // Simple Voice Chat plugin API — plain Java library, optional at runtime.
+    compileOnly "de.maxhenkel.voicechat:voicechat-api:${voicechat_api_version}"
 }
 
 tasks.named('processResources', ProcessResources).configure {

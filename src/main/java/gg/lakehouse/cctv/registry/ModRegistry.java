@@ -3,6 +3,9 @@ package gg.lakehouse.cctv.registry;
 import gg.lakehouse.cctv.CCTV;
 import gg.lakehouse.cctv.capture.CaptureCardBlock;
 import gg.lakehouse.cctv.capture.CaptureCardBlockEntity;
+import gg.lakehouse.cctv.microphone.MicrophoneBlock;
+import gg.lakehouse.cctv.microphone.MicrophoneBlockEntity;
+import gg.lakehouse.cctv.tape.TapeItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
@@ -36,6 +39,21 @@ public final class ModRegistry {
     public static final RegistryObject<Item> CAPTURE_CARD_ITEM = ITEMS.register("capture_card",
         () -> new BlockItem(CAPTURE_CARD.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> TAPE = ITEMS.register("tape",
+        () -> new TapeItem(new Item.Properties()));
+
+    public static final RegistryObject<MicrophoneBlock> MICROPHONE = BLOCKS.register("microphone",
+        () -> new MicrophoneBlock(BlockBehaviour.Properties.of()
+            .mapColor(MapColor.STONE)
+            .strength(1.5F)
+            .sound(SoundType.STONE)));
+
+    public static final RegistryObject<Item> MICROPHONE_ITEM = ITEMS.register("microphone",
+        () -> new BlockItem(MICROPHONE.get(), new Item.Properties()));
+
+    public static final RegistryObject<BlockEntityType<MicrophoneBlockEntity>> MICROPHONE_BLOCK_ENTITY = BLOCK_ENTITIES.register("microphone",
+        () -> BlockEntityType.Builder.of(MicrophoneBlockEntity::new, MICROPHONE.get()).build(null));
+
     public static final RegistryObject<BlockEntityType<CaptureCardBlockEntity>> CAPTURE_CARD_BLOCK_ENTITY = BLOCK_ENTITIES.register("capture_card",
         () -> BlockEntityType.Builder.of(CaptureCardBlockEntity::new, CAPTURE_CARD.get()).build(null));
 
@@ -43,7 +61,11 @@ public final class ModRegistry {
         () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.cctv"))
             .icon(() -> CAPTURE_CARD_ITEM.get().getDefaultInstance())
-            .displayItems((params, output) -> output.accept(CAPTURE_CARD_ITEM.get()))
+            .displayItems((params, output) -> {
+                output.accept(CAPTURE_CARD_ITEM.get());
+                output.accept(TAPE.get());
+                output.accept(MICROPHONE_ITEM.get());
+            })
             .build());
 
     public static void register(IEventBus modBus) {
