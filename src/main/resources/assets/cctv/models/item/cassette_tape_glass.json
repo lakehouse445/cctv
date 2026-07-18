@@ -1,0 +1,16 @@
+{
+  "textures": {
+    "particle": "cctv:item/cassette_tape",
+    "0": "cctv:item/cassette_tape"
+  },
+  "elements": [
+    {
+      "name": "body_front_glass",
+      "from": [0, 0, 7],
+      "to": [16, 8, 9],
+      "faces": {
+        "north": {"uv": [0, 0, 8, 4], "texture": "#0"}
+      }
+    }
+  ]
+}
