@@ -1,3 +1,55 @@
+0.4
+===
+ - 0.4.2  Hold the tape like a VHS; written labels
+          First and third person each get their own hand-tuned viewmodel pose
+          (thanks Diane); the cassette is held up like you're reading the label.
+          Renaming a tape on an anvil writes the name on the white label sticker
+          in black, auto-shrunk to fit, everywhere the 3D model shows (hand,
+          item frames, ground) - so an evidence shelf of framed tapes actually
+          reads. Labels cap at 12 characters; the anvil refuses longer names
+          with a "Too long!" notice.
+ - 0.4.1  Tape gets real art: 3D cassette + new sprite
+          The tape renders as a proper 3D cassette model in hand, on the
+          ground, and in item frames, and as a new flat sprite in inventories
+          (custom item renderer picks per context). Model source lives in
+          modeling/casettetape.bbmodel - its roller groups carry a spinning
+          animation reserved for the VCR/deck renderers later.
+ - 0.4.0  Microphones: intercom panels with real player voices
+          New microphone block - a wall-mounted intercom panel (thin 12x12
+          front, placeholder capture card textures). Craft from smooth stone
+          corners, iron nugget edges, redstone centre. Right-click toggles
+          live/muted.
+          With Simple Voice Chat installed, a live microphone picks up player
+          voices within 8 blocks. Audio is decoded per speaker, run through the
+          spec's radio filter (300-3400 Hz telephone band, soft-clip crunch,
+          faint hiss - strength config later), and handed to Lua as
+          microphone_audio events: (event, side, samples) where samples is a
+          table of 8-bit signed 48 kHz amplitudes that feeds straight into
+          speaker.playAudio. A working intercom is a 4-line Lua loop.
+          Peripheral "microphone": setListening(bool), isListening(),
+          getSampleRate(), getPickupRange().
+          SVC stays optional: without it the block places and wraps fine, it
+          just never hears anything. Uses the voicechat-api 2.6.20 plugin API
+          (compile-only), registered via @ForgeVoicechatPlugin.
+
+0.3
+===
+ - 0.3.1  Real tape item texture (replaces the borrowed CC:T floppy art)
+ - 0.3.0  Tapes: recordings are physical now
+          New tape item, 10 MB, stacks to 1. Craft 2 from iron nuggets around
+          paper / redstone / paper (placeholder recipe). Rename on an anvil to
+          label it; tooltip shows used space.
+          Recordings live on the tape: right-click the capture card with a tape
+          to insert, sneak-right-click to eject (breaking the block drops it).
+          Recording requires a tape; frames buffer in memory and commit to the
+          tape when recording stops (tape-full commits are discarded with an
+          error). Tape contents live in the world folder (cctv/tapes/<id>) like
+          CC:T's disks, so they survive restarts and travel with the item.
+          GUI shows the inserted tape's label, fill, and recording count; Export
+          now exports the newest recording on the tape.
+          Lua additions on capture_card: hasTape(), getTapeLabel(), getCapacity(),
+          getFreeSpace(), list() (name/bytes/fps/frames/seconds), delete(name).
+
 0.2
 ===
  - 0.2.0  The capture card actually records and exports
