@@ -3,9 +3,11 @@ package gg.lakehouse.cctv.capture;
 import gg.lakehouse.cctv.network.ClientboundOpenCaptureScreenPacket;
 import gg.lakehouse.cctv.network.PacketHandler;
 import gg.lakehouse.cctv.registry.ModRegistry;
+import gg.lakehouse.cctv.tape.TapeItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -47,9 +49,25 @@ public class CaptureCardBlock extends HorizontalDirectionalBlock implements Enti
         if (!level.isClientSide
             && player instanceof ServerPlayer serverPlayer
             && level.getBlockEntity(pos) instanceof CaptureCardBlockEntity captureCard) {
-            PacketHandler.sendTo(serverPlayer, new ClientboundOpenCaptureScreenPacket(captureCard.status()));
+            var held = player.getItemInHand(hand);
+            if (held.getItem() instanceof TapeItem && !captureCard.hasTape()) {
+                captureCard.insertTape(held);
+            } else if (player.isShiftKeyDown() && captureCard.hasTape()) {
+                player.getInventory().placeItemBackInInventory(captureCard.ejectTape());
+            } else {
+                PacketHandler.sendTo(serverPlayer, new ClientboundOpenCaptureScreenPacket(captureCard.status()));
+            }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof CaptureCardBlockEntity captureCard
+            && captureCard.hasTape()) {
+            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), captureCard.ejectTape());
+        }
+        super.onRemove(state, level, pos, newState, isMoving);
     }
 
     @Override

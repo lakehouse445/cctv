@@ -71,6 +71,17 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     public record Recording(int fps, List<TermFrame> frames) {
     }
 
+    public record Header(int fps, int frames) {
+    }
+
+    /** Reads just the header of a serialised recording without decoding frames. */
+    public static Header readHeader(java.io.InputStream in) throws IOException {
+        var data = new DataInputStream(new GZIPInputStream(in));
+        int version = data.readUnsignedByte();
+        if (version != FORMAT_VERSION) throw new IOException("Unknown recording format " + version);
+        return new Header(data.readInt(), data.readInt());
+    }
+
     public static byte[] writeAll(int fps, List<TermFrame> frames) throws IOException {
         var bytes = new ByteArrayOutputStream();
         try (var out = new DataOutputStream(new GZIPOutputStream(bytes))) {

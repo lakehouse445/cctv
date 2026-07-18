@@ -1,6 +1,5 @@
 package gg.lakehouse.cctv.network;
 
-import gg.lakehouse.cctv.CCTV;
 import gg.lakehouse.cctv.capture.CaptureCardBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -8,7 +7,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 
-import java.io.IOException;
 import java.util.function.Supplier;
 
 public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fps) {
@@ -48,15 +46,11 @@ public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fp
 
     private static String export(CaptureCardBlockEntity captureCard, ServerPlayer player) {
         if (captureCard.isRecording()) return "Stop recording first";
-        if (captureCard.frameCount() == 0) return "Nothing recorded";
-        try {
-            var data = captureCard.exportBytes();
-            if (data.length > MAX_EXPORT_BYTES) return "Recording too large to export - try a shorter clip";
-            PacketHandler.sendTo(player, new ClientboundExportRecordingPacket(data));
-            return null;
-        } catch (IOException e) {
-            CCTV.LOGGER.error("Failed to serialise recording", e);
-            return "Internal error while exporting";
-        }
+        if (!captureCard.hasTape()) return "No tape in the capture card";
+        var data = captureCard.exportLatest();
+        if (data == null) return "Nothing on this tape";
+        if (data.length > MAX_EXPORT_BYTES) return "Recording too large to export - try a shorter clip";
+        PacketHandler.sendTo(player, new ClientboundExportRecordingPacket(data));
+        return null;
     }
 }

@@ -4,6 +4,7 @@ import gg.lakehouse.cctv.network.CaptureStatus;
 import gg.lakehouse.cctv.network.PacketHandler;
 import gg.lakehouse.cctv.network.ServerboundCaptureActionPacket;
 import gg.lakehouse.cctv.network.ServerboundCaptureActionPacket.Action;
+import gg.lakehouse.cctv.tape.TapeItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -67,9 +68,9 @@ public class CaptureCardScreen extends Screen {
     }
 
     private void updateButtons() {
-        recordButton.active = !status.recording() && status.hasMonitor();
+        recordButton.active = !status.recording() && status.hasMonitor() && status.hasTape();
         stopButton.active = status.recording();
-        exportButton.active = !status.recording() && status.frames() > 0;
+        exportButton.active = !status.recording() && status.recordings() > 0;
         fpsButton.active = !status.recording();
     }
 
@@ -77,7 +78,7 @@ public class CaptureCardScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
         int centerX = width / 2;
-        int top = height / 2 - 50;
+        int top = height / 2 - 62;
         graphics.drawCenteredString(font, title, centerX, top, 0xFFFFFF);
 
         var monitor = status.hasMonitor()
@@ -85,13 +86,20 @@ public class CaptureCardScreen extends Screen {
             : Component.literal("Monitor: none adjacent").withStyle(ChatFormatting.RED);
         graphics.drawCenteredString(font, monitor, centerX, top + 16, 0xFFFFFF);
 
+        var tape = status.hasTape()
+            ? Component.literal("Tape: " + status.tapeLabel() + " (" + TapeItem.formatBytes(status.usedBytes())
+                + " / " + TapeItem.formatBytes(status.capacityBytes()) + ", " + status.recordings() + " recordings)")
+                .withStyle(ChatFormatting.AQUA)
+            : Component.literal("Tape: none - right-click with a tape to insert").withStyle(ChatFormatting.RED);
+        graphics.drawCenteredString(font, tape, centerX, top + 28, 0xFFFFFF);
+
         var state = status.recording()
             ? Component.literal("REC ● " + status.frames() + " frames @ " + status.fps() + " fps").withStyle(ChatFormatting.RED)
-            : Component.literal(status.frames() > 0 ? status.frames() + " frames ready to export" : "Idle").withStyle(ChatFormatting.GRAY);
-        graphics.drawCenteredString(font, state, centerX, top + 28, 0xFFFFFF);
+            : Component.literal("Idle").withStyle(ChatFormatting.GRAY);
+        graphics.drawCenteredString(font, state, centerX, top + 40, 0xFFFFFF);
 
         if (!error.isEmpty()) {
-            graphics.drawCenteredString(font, Component.literal(error).withStyle(ChatFormatting.RED), centerX, top + 90, 0xFFFFFF);
+            graphics.drawCenteredString(font, Component.literal(error).withStyle(ChatFormatting.RED), centerX, top + 102, 0xFFFFFF);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }
