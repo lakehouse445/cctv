@@ -28,3 +28,8 @@ forge*changelog.txt
 
 # local batch scripts
 *.bat
+
+# Loose working assets in the workspace root
+/*.json
+/*.png
+*.zip

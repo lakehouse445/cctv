@@ -1,0 +1,23 @@
+{
+  "variants": {
+    "state=empty,facing=north": {"model": "cctv:block/playback_deck_off"},
+    "state=empty,facing=east": {"model": "cctv:block/playback_deck_off", "y": 90},
+    "state=empty,facing=south": {"model": "cctv:block/playback_deck_off", "y": 180},
+    "state=empty,facing=west": {"model": "cctv:block/playback_deck_off", "y": 270},
+
+    "state=filled,facing=north": {"model": "cctv:block/playback_deck_play_rewind"},
+    "state=filled,facing=east": {"model": "cctv:block/playback_deck_play_rewind", "y": 90},
+    "state=filled,facing=south": {"model": "cctv:block/playback_deck_play_rewind", "y": 180},
+    "state=filled,facing=west": {"model": "cctv:block/playback_deck_play_rewind", "y": 270},
+
+    "state=playing,facing=north": {"model": "cctv:block/playback_deck_play"},
+    "state=playing,facing=east": {"model": "cctv:block/playback_deck_play", "y": 90},
+    "state=playing,facing=south": {"model": "cctv:block/playback_deck_play", "y": 180},
+    "state=playing,facing=west": {"model": "cctv:block/playback_deck_play", "y": 270},
+
+    "state=rewinding,facing=north": {"model": "cctv:block/playback_deck_rewind"},
+    "state=rewinding,facing=east": {"model": "cctv:block/playback_deck_rewind", "y": 90},
+    "state=rewinding,facing=south": {"model": "cctv:block/playback_deck_rewind", "y": 180},
+    "state=rewinding,facing=west": {"model": "cctv:block/playback_deck_rewind", "y": 270}
+  }
+}

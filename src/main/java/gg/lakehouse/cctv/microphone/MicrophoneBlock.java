@@ -22,7 +22,10 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/** Wall-mounted intercom panel. Right-click toggles whether it's live. */
+/**
+ * Base microphone block: wall-mounted intercom panel by default, with the
+ * desktop stand variant overriding shape and placement. Right-click toggles live.
+ */
 public class MicrophoneBlock extends HorizontalDirectionalBlock implements EntityBlock {
     private static final VoxelShape SHAPE_NORTH = Block.box(2, 2, 14, 14, 14, 16);
     private static final VoxelShape SHAPE_SOUTH = Block.box(2, 2, 0, 14, 14, 2);

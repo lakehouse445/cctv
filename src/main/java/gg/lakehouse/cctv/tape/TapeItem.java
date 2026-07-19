@@ -22,6 +22,8 @@ public class TapeItem extends Item {
     public static final int MAX_LABEL_CHARS = 12;
     private static final String TAG_ID = "TapeId";
     private static final String TAG_USED = "UsedBytes";
+    private static final String TAG_RESUME_RECORDING = "ResumeRecording";
+    private static final String TAG_RESUME_SECONDS = "ResumeSeconds";
 
     public TapeItem(Properties properties) {
         super(properties.stacksTo(1));
@@ -48,11 +50,46 @@ public class TapeItem extends Item {
         stack.getOrCreateTag().putLong(TAG_USED, used);
     }
 
+    // === Resume point: VHS tapes must be rewound ===
+
+    /** Records where the head physically sits on this tape; null/zero clears it. */
+    public static void setResumePoint(ItemStack stack, @Nullable String recording, double seconds) {
+        var tag = stack.getOrCreateTag();
+        if (recording == null || seconds <= 0) {
+            tag.remove(TAG_RESUME_RECORDING);
+            tag.remove(TAG_RESUME_SECONDS);
+        } else {
+            tag.putString(TAG_RESUME_RECORDING, recording);
+            tag.putDouble(TAG_RESUME_SECONDS, seconds);
+        }
+    }
+
+    @Nullable
+    public static String getResumeRecording(ItemStack stack) {
+        var tag = stack.getTag();
+        return tag != null && tag.contains(TAG_RESUME_RECORDING) ? tag.getString(TAG_RESUME_RECORDING) : null;
+    }
+
+    public static double getResumeSeconds(ItemStack stack) {
+        var tag = stack.getTag();
+        return tag == null ? 0 : tag.getDouble(TAG_RESUME_SECONDS);
+    }
+
+    public static String formatTime(double seconds) {
+        int total = (int) Math.round(seconds);
+        return String.format("%d:%02d", total / 60, total % 60);
+    }
+
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         long used = getUsedBytes(stack);
         tooltip.add(Component.literal(formatBytes(used) + " / " + formatBytes(CAPACITY_BYTES) + " used")
             .withStyle(ChatFormatting.GRAY));
+        var resume = getResumeRecording(stack);
+        if (resume != null) {
+            tooltip.add(Component.literal("Not rewound - " + formatTime(getResumeSeconds(stack)) + " into " + resume)
+                .withStyle(ChatFormatting.GOLD));
+        }
     }
 
     @Override

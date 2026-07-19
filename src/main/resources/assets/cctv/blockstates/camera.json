@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "cctv:block/camera"},
+    "facing=east": {"model": "cctv:block/camera", "y": 90},
+    "facing=south": {"model": "cctv:block/camera", "y": 180},
+    "facing=west": {"model": "cctv:block/camera", "y": 270}
+  }
+}

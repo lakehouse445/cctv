@@ -1,0 +1,20 @@
+{
+	"textures": {
+		"particle": "cctv:block/playback_deck",
+		"1": "cctv:block/playback_deck"
+	},
+	"elements": [
+		{
+			"name": "fastforward",
+			"from": [9, 2, 1],
+			"to": [11, 5, 3],
+			"faces": {
+				"north": {"uv": [5.258, 6.758, 5.742, 7.492], "texture": "#1"},
+				"east": {"uv": [5.258, 6.758, 5.492, 7.492], "texture": "#1"},
+				"west": {"uv": [5.508, 6.758, 5.742, 7.492], "texture": "#1"},
+				"up": {"uv": [5.742, 6.992, 5.258, 6.758], "texture": "#1"},
+				"down": {"uv": [5.742, 7.258, 5.258, 7.492], "texture": "#1"}
+			}
+		}
+	]
+}

@@ -1,90 +1,51 @@
+0.9
+===
+ - 0.9.3  Fast-forward joins the transport (GUI, Lua and a pressable panel
+          button); the unused Rec button is gone from the deck face.
+ - 0.9.2  The deck's front-panel buttons latch in when the matching action
+          fires from the GUI or Lua, popping out on eject or another press.
+ - 0.9.1  Cassette reels spin in the playback deck: right while playing, left
+          and faster while rewinding.
+ - 0.9.0  Playback deck gets its real model set: empty/filled/playing/rewinding
+          states with LED variants, and the loaded cassette visible inside.
+
+0.8
+===
+ - 0.8.0  Security camera: real raycast of the world (true block models and
+          textures, entities with skins, held items, nametags), pan/tilt/zoom,
+          camera_motion events, 128-block range, dvr.lua reference program.
+
+0.7
+===
+ - 0.7.0  RAID arrays complete: SPAN splits across tapes, loop mode tapes over
+          the oldest footage, array playback reassembles segment groups.
+
+0.6
+===
+ - 0.6.0  Stackable VCRs form arrays (SPAN/STRIPE/MIRROR) recording any
+          touching monitor, with per-deck and array-wide Lua control.
+
+0.5
+===
+ - 0.5.0  Playback deck plays tapes onto monitors with full Lua transport;
+          tapes must be rewound. Intercom and desktop microphone variants.
+
 0.4
 ===
- - 0.4.2  Hold the tape like a VHS; written labels
-          First and third person each get their own hand-tuned viewmodel pose;
-          the cassette is held up like you're reading the label.
-          Renaming a tape on an anvil writes the name on the white label sticker
-          in black, auto-shrunk to fit, everywhere the 3D model shows (hand,
-          item frames, ground) - so an evidence shelf of framed tapes actually
-          reads. Labels cap at 12 characters; the anvil refuses longer names
-          with a "Too long!" notice.
- - 0.4.1  Tape gets real art: 3D cassette + new sprite
-          The tape renders as a proper 3D cassette model in hand, on the
-          ground, and in item frames, and as a new flat sprite in inventories
-          (custom item renderer picks per context). Model source lives in
-          modeling/casettetape.bbmodel - its roller groups carry a spinning
-          animation reserved for the VCR/deck renderers later.
- - 0.4.0  Microphones: intercom panels with real player voices
-          New microphone block - a wall-mounted intercom panel (thin 12x12
-          front, placeholder capture card textures). Craft from smooth stone
-          corners, iron nugget edges, redstone centre. Right-click toggles
-          live/muted.
-          With Simple Voice Chat installed, a live microphone picks up player
-          voices within 8 blocks. Audio is decoded per speaker, run through the
-          spec's radio filter (300-3400 Hz telephone band, soft-clip crunch,
-          faint hiss - strength config later), and handed to Lua as
-          microphone_audio events: (event, side, samples) where samples is a
-          table of 8-bit signed 48 kHz amplitudes that feeds straight into
-          speaker.playAudio. A working intercom is a 4-line Lua loop.
-          Peripheral "microphone": setListening(bool), isListening(),
-          getSampleRate(), getPickupRange().
-          SVC stays optional: without it the block places and wraps fine, it
-          just never hears anything. Uses the voicechat-api 2.6.20 plugin API
-          (compile-only), registered via @ForgeVoicechatPlugin.
+ - 0.4.0  Microphones with Simple Voice Chat: radio-filtered voices raised as
+          Lua events. 3D cassette model with anvil-written labels.
 
 0.3
 ===
- - 0.3.1  Real tape item texture (replaces the borrowed CC:T floppy art)
- - 0.3.0  Tapes: recordings are physical now
-          New tape item, 10 MB, stacks to 1. Craft 2 from iron nuggets around
-          paper / redstone / paper (placeholder recipe). Rename on an anvil to
-          label it; tooltip shows used space.
-          Recordings live on the tape: right-click the capture card with a tape
-          to insert, sneak-right-click to eject (breaking the block drops it).
-          Recording requires a tape; frames buffer in memory and commit to the
-          tape when recording stops (tape-full commits are discarded with an
-          error). Tape contents live in the world folder (cctv/tapes/<id>) like
-          CC:T's disks, so they survive restarts and travel with the item.
-          GUI shows the inserted tape's label, fill, and recording count; Export
-          now exports the newest recording on the tape.
-          Lua additions on capture_card: hasTape(), getTapeLabel(), getCapacity(),
-          getFreeSpace(), list() (name/bytes/fps/frames/seconds), delete(name).
+ - 0.3.0  Physical tapes: 10 MB items that store recordings in the world save
+          and survive restarts. Lua list/delete/getFreeSpace.
 
 0.2
 ===
- - 0.2.0  The capture card actually records and exports
-          Recording: point the capture card at any adjacent monitor (any of its six
-          sides). record() snapshots the monitor's full terminal - text, colours,
-          and per-recording 16-colour palette - at 1-20 fps, capped at 3000 frames.
-          Full frames only for now; the delta format from spec section 8 comes with
-          tapes. Recordings are held in memory and do not survive a chunk unload.
-          Export: GIF, rendered client-side with CC:T's own term_font atlas so text
-          looks right, written to <gameDir>/cctv-exports/rec_<timestamp>.gif with a
-          clickable chat link, like screenshots. Uses javax.imageio only; recordings
-          whose compressed payload exceeds ~800 KB refuse to export (packet cap).
-          GUI: placeholder screen on right-click - FPS cycle (1/2/5/10/20), Record,
-          Stop, Export GIF buttons plus live status; server pushes state updates.
-          Lua: record([fps]), stop(), isRecording(), getFrameCount() all work on the
-          capture_card peripheral; export() stays GUI-only until tapes land.
-          Internals: new cctv:main network channel (4 packets); CC:T's full jar is
-          now a compile dependency to read monitor terminals (MonitorBlockEntity,
-          ServerMonitor, Terminal).
+ - 0.2.0  Capture card records adjacent monitors (1-20 fps) and exports
+          animated GIFs with a clickable chat link.
 
 0.1
 ===
- - 0.1.1  Add the capture card block (screen recorder shell)
-          Craftable: smooth stone top/bottom rows, iron ingots left/right, redstone centre.
-          Horizontal facing block with a block entity; drops itself, pickaxe mineable,
-          lives in the new CC:TV creative tab.
-          Exposed as the "capture_card" peripheral via ForgeComputerCraftAPI:
-          isRecording() works (always false for now), record(source) and stop() are
-          stubs until the recorder lands.
-          Placeholder art borrowed from CC:Tweaked's disk drive textures
-          (capture_card_front/side/top).
-          Add build17.bat: builds with JDK 17 regardless of the Java on PATH.
- - 0.1.0  Initial project scaffold
-          Forge 1.20.1-47.4.10, ForgeGradle 6, Gradle 8.8, CC:Tweaked 1.120.0 with a
-          [1.119.0,) runtime range (required); Simple Voice Chat optional.
-          Feature-first package tree under gg.lakehouse.cctv: registry, camera, capture,
-          tape, vcr, playback, microphone, media, export, network, client,
-          integration/voicechat.
+ - 0.1.0  Initial scaffold: Forge 1.20.1, CC:Tweaked 1.120.0, package
+          gg.lakehouse.cctv, CC:TV creative tab.

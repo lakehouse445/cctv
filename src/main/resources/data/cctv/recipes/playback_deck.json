@@ -2,14 +2,14 @@
   "type": "minecraft:crafting_shaped",
   "category": "redstone",
   "pattern": [
-    "SNS",
-    "NRN",
-    "SNS"
+    "SSS",
+    "IRI",
+    "III"
   ],
   "key": {
     "S": {"item": "minecraft:smooth_stone"},
-    "N": {"item": "minecraft:iron_nugget"},
+    "I": {"item": "minecraft:iron_ingot"},
     "R": {"item": "minecraft:redstone"}
   },
-  "result": {"item": "cctv:microphone"}
+  "result": {"item": "cctv:playback_deck"}
 }

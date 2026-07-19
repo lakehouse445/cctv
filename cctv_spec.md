@@ -29,7 +29,7 @@ The camera is a small block you mount on a wall or pole. It has an obvious lens 
 Point a monitor at a camera feed and you see through the camera in real time, at full visual quality. This is the classic "security office with a wall of monitors" setup and it's cheap for the server to run, because each player's own game does the drawing.
 
 ### Letting computers see the footage
-Live viewing alone doesn't let a computer *do* anything with the image. So cameras can also produce actual picture data that Lua programs can read, at up to 320x200 pixels — which is the most a maxed-out monitor can physically display anyway. These frames are drawn by the server in a simplified style: blocks appear in their map colors, distant things fade out, and players show up as small colored figures. It looks like old security footage, which is exactly right.
+Live viewing alone doesn't let a computer *do* anything with the image. So cameras can also produce actual picture data that Lua programs can read, at up to 320x200 pixels — which is the most a maxed-out monitor can physically display anyway. These frames are a real raycast of the world: actual block models and textures, biome tints, see-through glass, and entities rendered with their real models and skins, with distance fading into the horizon. (On dedicated servers, where client textures don't exist, frames fall back to a map-color style.) Squeezed into 16 colors and dithered, it looks like good security footage.
 
 Because programs can read frames, they can also compare them. If enough of the image changes between frames, the camera fires a `camera_motion` event — so a few lines of Lua gets you motion alarms, automatic recording, or a message to whoever's on duty.
 

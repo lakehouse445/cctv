@@ -1,7 +1,11 @@
 {
   "itemGroup.cctv": "CC:TV",
+  "block.cctv.camera": "Camera",
   "block.cctv.capture_card": "Capture Card",
-  "block.cctv.microphone": "Microphone",
+  "block.cctv.playback_deck": "Playback Deck",
+  "block.cctv.vcr": "VCR",
+  "block.cctv.intercom": "Intercom",
+  "block.cctv.desktop_microphone": "Desktop Microphone",
   "item.cctv.tape": "Tape",
   "gui.cctv.label_too_long": "Too long!"
 }

@@ -4,7 +4,7 @@
     {
       "rolls": 1,
       "entries": [
-        {"type": "minecraft:item", "name": "cctv:microphone"}
+        {"type": "minecraft:item", "name": "cctv:camera"}
       ],
       "conditions": [
         {"condition": "minecraft:survives_explosion"}

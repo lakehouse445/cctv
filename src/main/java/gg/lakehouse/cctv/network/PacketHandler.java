@@ -26,6 +26,12 @@ public final class PacketHandler {
             ClientboundCaptureStatusPacket::encode, ClientboundCaptureStatusPacket::decode, ClientboundCaptureStatusPacket::handle);
         CHANNEL.registerMessage(id++, ClientboundExportRecordingPacket.class,
             ClientboundExportRecordingPacket::encode, ClientboundExportRecordingPacket::decode, ClientboundExportRecordingPacket::handle);
+        CHANNEL.registerMessage(id++, ServerboundPlaybackActionPacket.class,
+            ServerboundPlaybackActionPacket::encode, ServerboundPlaybackActionPacket::decode, ServerboundPlaybackActionPacket::handle);
+        CHANNEL.registerMessage(id++, ClientboundOpenPlaybackScreenPacket.class,
+            ClientboundOpenPlaybackScreenPacket::encode, ClientboundOpenPlaybackScreenPacket::decode, ClientboundOpenPlaybackScreenPacket::handle);
+        CHANNEL.registerMessage(id++, ClientboundPlaybackStatusPacket.class,
+            ClientboundPlaybackStatusPacket::encode, ClientboundPlaybackStatusPacket::decode, ClientboundPlaybackStatusPacket::handle);
     }
 
     public static void sendTo(ServerPlayer player, Object message) {

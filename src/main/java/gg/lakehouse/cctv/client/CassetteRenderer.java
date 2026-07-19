@@ -1,15 +1,16 @@
 package gg.lakehouse.cctv.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import gg.lakehouse.cctv.CCTV;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.entity.ItemRenderer;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.client.ForgeHooksClient;
@@ -21,6 +22,12 @@ import net.minecraftforge.client.ForgeHooksClient;
 public final class CassetteRenderer {
     public static final ResourceLocation CASSETTE_MODEL = new ResourceLocation(CCTV.MOD_ID, "item/cassette_tape");
     public static final ResourceLocation CASSETTE_GLASS_MODEL = new ResourceLocation(CCTV.MOD_ID, "item/cassette_tape_glass");
+    public static final ResourceLocation CASSETTE_REEL_MODEL = new ResourceLocation(CCTV.MOD_ID, "item/cassette_tape_reel");
+
+    // Reel centres in 0-1 model space (left at 4,4 and right at 12,4 in model units).
+    private static final float REEL_LEFT_X = 4.0F / 16.0F;
+    private static final float REEL_RIGHT_X = 12.0F / 16.0F;
+    private static final float REEL_Y = 4.0F / 16.0F;
 
     // Label sticker geometry in model units (see models/item/cassette_tape.json).
     private static final float LABEL_CENTER_X = 8.0F;
@@ -34,23 +41,50 @@ public final class CassetteRenderer {
 
     public static void render(ItemStack stack, ItemDisplayContext context, boolean leftHand, PoseStack poseStack,
                               MultiBufferSource buffers, int light, int overlay) {
+        render(stack, context, leftHand, poseStack, buffers, light, overlay, 0);
+    }
+
+    /**
+     * @param reelAngle spin of the reels in degrees; positive reads clockwise
+     *                  (playing) to someone looking at the label, negative
+     *                  counterclockwise (rewinding).
+     */
+    public static void render(ItemStack stack, ItemDisplayContext context, boolean leftHand, PoseStack poseStack,
+                              MultiBufferSource buffers, int light, int overlay, float reelAngle) {
         var minecraft = Minecraft.getInstance();
         var itemRenderer = minecraft.getItemRenderer();
         var solid = minecraft.getModelManager().getModel(CASSETTE_MODEL);
         var glass = minecraft.getModelManager().getModel(CASSETTE_GLASS_MODEL);
+        var reel = minecraft.getModelManager().getModel(CASSETTE_REEL_MODEL);
         poseStack.pushPose();
-        solid = ForgeHooksClient.handleCameraTransforms(poseStack, solid, context, leftHand);
+        ForgeHooksClient.handleCameraTransforms(poseStack, solid, context, leftHand);
         poseStack.translate(-0.5F, -0.5F, -0.5F);
-        // Solid geometry first on the cutout pass: correct depth from every
-        // angle, double-sided. The windowed front face lives in its own model
-        // and renders translucent afterwards, so the glass keeps its tint while
-        // blending over an already-complete interior.
-        var cutout = buffers.getBuffer(RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS));
+        // Opaque shell (with its own back faces) on the culled cutout sheet;
+        // the front window on the translucent-cull sheet. Both are fixed
+        // buffers in RenderBuffers, flushed cutout-then-translucent, so the
+        // interior always has depth before the glass blends over it. (Plain
+        // entityTranslucent is NOT a fixed buffer and flushes early, which
+        // made everything behind the window vanish.)
+        var cutout = ItemRenderer.getFoilBufferDirect(buffers,
+            Sheets.cutoutBlockSheet(), true, stack.hasFoil());
         itemRenderer.renderModelLists(solid, stack, light, overlay, poseStack, cutout);
+        renderReel(itemRenderer, reel, stack, light, overlay, poseStack, cutout, REEL_LEFT_X, reelAngle);
+        renderReel(itemRenderer, reel, stack, light, overlay, poseStack, cutout, REEL_RIGHT_X, reelAngle);
         var translucent = ItemRenderer.getFoilBufferDirect(buffers,
-            RenderType.entityTranslucent(InventoryMenu.BLOCK_ATLAS), true, stack.hasFoil());
+            Sheets.translucentCullBlockSheet(), true, stack.hasFoil());
         itemRenderer.renderModelLists(glass, stack, light, overlay, poseStack, translucent);
         renderLabel(stack, poseStack, buffers, light);
+        poseStack.popPose();
+    }
+
+    private static void renderReel(ItemRenderer itemRenderer, BakedModel model,
+                                   ItemStack stack, int light, int overlay, PoseStack poseStack,
+                                   VertexConsumer buffer, float centerX, float angle) {
+        poseStack.pushPose();
+        poseStack.translate(centerX, REEL_Y, 0);
+        poseStack.mulPose(Axis.ZP.rotationDegrees(angle));
+        poseStack.translate(-0.5F, -0.5F, 0);
+        itemRenderer.renderModelLists(model, stack, light, overlay, poseStack, buffer);
         poseStack.popPose();
     }
 

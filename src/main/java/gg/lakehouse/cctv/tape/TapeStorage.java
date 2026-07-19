@@ -25,7 +25,8 @@ import java.util.stream.Stream;
 public final class TapeStorage {
     private static final Pattern RECORDING_NAME = Pattern.compile("rec_(\\d{3})\\.bin");
 
-    public record RecordingInfo(String name, long bytes, int fps, int frames) {
+    public record RecordingInfo(String name, long bytes, int fps, int frames, long modifiedMs,
+                                @Nullable TermFrame.SegmentInfo segment) {
     }
 
     private TapeStorage() {
@@ -55,7 +56,9 @@ public final class TapeStorage {
                 try (InputStream in = Files.newInputStream(file)) {
                     var header = TermFrame.readHeader(in);
                     var name = file.getFileName().toString();
-                    result.add(new RecordingInfo(name.substring(0, name.length() - 4), size(file), header.fps(), header.frames()));
+                    long modified = Files.getLastModifiedTime(file).toMillis();
+                    result.add(new RecordingInfo(name.substring(0, name.length() - 4), size(file),
+                        header.fps(), header.frames(), modified, header.segment()));
                 } catch (IOException e) {
                     CCTV.LOGGER.error("Skipping unreadable recording {}", file, e);
                 }

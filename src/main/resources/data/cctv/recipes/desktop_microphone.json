@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "N",
+    "I",
+    "S"
+  ],
+  "key": {
+    "N": {"item": "minecraft:iron_nugget"},
+    "I": {"item": "minecraft:iron_ingot"},
+    "S": {"item": "minecraft:smooth_stone"}
+  },
+  "result": {"item": "cctv:desktop_microphone"}
+}

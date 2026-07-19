@@ -1,0 +1,7 @@
+{
+  "parent": "cctv:block/playback_deck",
+  "textures": {
+    "rewind": "cctv:block/rewind_off",
+	  "play": "cctv:block/play_off"
+  }
+}

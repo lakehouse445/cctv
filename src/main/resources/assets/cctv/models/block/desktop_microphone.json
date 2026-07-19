@@ -1,0 +1,47 @@
+{
+  "textures": {
+    "particle": "cctv:block/capture_card_side",
+    "side": "cctv:block/capture_card_side",
+    "top": "cctv:block/capture_card_top"
+  },
+  "elements": [
+    {
+      "name": "base",
+      "from": [4, 0, 4],
+      "to": [12, 2, 12],
+      "faces": {
+        "north": {"texture": "#side"},
+        "east": {"texture": "#side"},
+        "south": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"},
+        "down": {"texture": "#side"}
+      }
+    },
+    {
+      "name": "pole",
+      "from": [7, 2, 7],
+      "to": [9, 8, 9],
+      "faces": {
+        "north": {"texture": "#side"},
+        "east": {"texture": "#side"},
+        "south": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"}
+      }
+    },
+    {
+      "name": "head",
+      "from": [6, 8, 6],
+      "to": [10, 11, 10],
+      "faces": {
+        "north": {"texture": "#top"},
+        "east": {"texture": "#side"},
+        "south": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"},
+        "down": {"texture": "#side"}
+      }
+    }
+  ]
+}

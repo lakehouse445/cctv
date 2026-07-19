@@ -21,7 +21,20 @@ import java.util.zip.GZIPOutputStream;
  * Full frames only for now — the delta format from the spec arrives with tapes.
  */
 public record TermFrame(int width, int height, int[] palette, String[] text, String[] fg, String[] bg) {
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_V1 = 1;
+    /** V2 adds segment metadata so recordings can span, stripe, or loop across tapes. */
+    private static final int FORMAT_V2 = 2;
+
+    /**
+     * Links one file to a recording group spread over several tapes.
+     * index orders segments in time, lane/lanes describe striping
+     * (lane 0 of 1 = not striped), totalFrames is -1 for open loop chains.
+     */
+    public record SegmentInfo(java.util.UUID group, int index, int lane, int lanes, int totalFrames) {
+        public String shortId() {
+            return "grp_" + group.toString().substring(0, 8);
+        }
+    }
 
     public static TermFrame capture(Terminal terminal) {
         int width = terminal.getWidth();
@@ -68,26 +81,40 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
         return new TermFrame(width, height, palette, text, fg, bg);
     }
 
-    public record Recording(int fps, List<TermFrame> frames) {
+    public record Recording(int fps, List<TermFrame> frames, @javax.annotation.Nullable SegmentInfo segment) {
     }
 
-    public record Header(int fps, int frames) {
+    public record Header(int fps, int frames, @javax.annotation.Nullable SegmentInfo segment) {
     }
 
     /** Reads just the header of a serialised recording without decoding frames. */
     public static Header readHeader(java.io.InputStream in) throws IOException {
         var data = new DataInputStream(new GZIPInputStream(in));
         int version = data.readUnsignedByte();
-        if (version != FORMAT_VERSION) throw new IOException("Unknown recording format " + version);
-        return new Header(data.readInt(), data.readInt());
+        if (version != FORMAT_V1 && version != FORMAT_V2) throw new IOException("Unknown recording format " + version);
+        int fps = data.readInt();
+        int count = data.readInt();
+        return new Header(fps, count, version == FORMAT_V2 ? readSegment(data) : null);
     }
 
     public static byte[] writeAll(int fps, List<TermFrame> frames) throws IOException {
+        return write(fps, frames, null);
+    }
+
+    public static byte[] write(int fps, List<TermFrame> frames, @javax.annotation.Nullable SegmentInfo segment) throws IOException {
         var bytes = new ByteArrayOutputStream();
         try (var out = new DataOutputStream(new GZIPOutputStream(bytes))) {
-            out.writeByte(FORMAT_VERSION);
+            out.writeByte(segment == null ? FORMAT_V1 : FORMAT_V2);
             out.writeInt(fps);
             out.writeInt(frames.size());
+            if (segment != null) {
+                out.writeLong(segment.group().getMostSignificantBits());
+                out.writeLong(segment.group().getLeastSignificantBits());
+                out.writeInt(segment.index());
+                out.writeInt(segment.lane());
+                out.writeInt(segment.lanes());
+                out.writeInt(segment.totalFrames());
+            }
             for (var frame : frames) frame.write(out);
         }
         return bytes.toByteArray();
@@ -96,12 +123,37 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     public static Recording readAll(byte[] data) throws IOException {
         try (var in = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(data)))) {
             int version = in.readUnsignedByte();
-            if (version != FORMAT_VERSION) throw new IOException("Unknown recording format " + version);
+            if (version != FORMAT_V1 && version != FORMAT_V2) throw new IOException("Unknown recording format " + version);
             int fps = in.readInt();
             int count = in.readInt();
+            var segment = version == FORMAT_V2 ? readSegment(in) : null;
             var frames = new ArrayList<TermFrame>(count);
             for (int i = 0; i < count; i++) frames.add(read(in));
-            return new Recording(fps, frames);
+            return new Recording(fps, frames, segment);
         }
+    }
+
+    private static SegmentInfo readSegment(DataInput in) throws IOException {
+        var group = new java.util.UUID(in.readLong(), in.readLong());
+        return new SegmentInfo(group, in.readInt(), in.readInt(), in.readInt(), in.readInt());
+    }
+
+    /** The card shown where a spanned recording's tape has gone missing. */
+    public static TermFrame missingTapeFrame(int width, int height, int[] palette) {
+        var text = new String[height];
+        var fg = new String[height];
+        var bg = new String[height];
+        var message = "TAPE MISSING";
+        for (int y = 0; y < height; y++) {
+            if (y == height / 2 && width >= message.length()) {
+                int pad = (width - message.length()) / 2;
+                text[y] = " ".repeat(pad) + message + " ".repeat(width - message.length() - pad);
+            } else {
+                text[y] = " ".repeat(width);
+            }
+            fg[y] = "e".repeat(width);
+            bg[y] = "f".repeat(width);
+        }
+        return new TermFrame(width, height, palette, text, fg, bg);
     }
 }

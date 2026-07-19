@@ -1,7 +1,11 @@
 {
   "replace": false,
   "values": [
+    "cctv:camera",
     "cctv:capture_card",
-    "cctv:microphone"
+    "cctv:intercom",
+    "cctv:desktop_microphone",
+    "cctv:playback_deck",
+    "cctv:vcr"
   ]
 }
