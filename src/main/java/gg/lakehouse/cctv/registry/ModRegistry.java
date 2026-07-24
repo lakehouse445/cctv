@@ -103,6 +103,14 @@ public final class ModRegistry {
     public static final RegistryObject<Item> VCR_ITEM = ITEMS.register("vcr",
         () -> new BlockItem(VCR.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> CAMERA_LINK = ITEMS.register("camera_link",
+        () -> new gg.lakehouse.cctv.link.DeviceLinkItem(
+            gg.lakehouse.cctv.link.DeviceLinkItem.Kind.CAMERA, new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> MICROPHONE_LINK = ITEMS.register("microphone_link",
+        () -> new gg.lakehouse.cctv.link.DeviceLinkItem(
+            gg.lakehouse.cctv.link.DeviceLinkItem.Kind.MICROPHONE, new Item.Properties().stacksTo(1)));
+
     public static final RegistryObject<BlockEntityType<VcrBlockEntity>> VCR_BLOCK_ENTITY = BLOCK_ENTITIES.register("vcr",
         () -> BlockEntityType.Builder.of(VcrBlockEntity::new, VCR.get()).build(null));
 
@@ -121,6 +129,8 @@ public final class ModRegistry {
                 output.accept(TAPE.get());
                 output.accept(INTERCOM_ITEM.get());
                 output.accept(DESKTOP_MICROPHONE_ITEM.get());
+                output.accept(CAMERA_LINK.get());
+                output.accept(MICROPHONE_LINK.get());
             })
             .build());
 

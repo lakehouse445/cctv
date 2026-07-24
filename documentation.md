@@ -51,14 +51,26 @@ Use a wired modem, or put the block next to the computer.
 
 ## 4. Camera
 
-The camera shows the world as a live picture. Mount the camera on a wall.
-The lens points away from the wall. A red light comes on when a computer reads
-the camera.
+The camera shows the world as a live picture. Mount the camera on a wall, a
+floor, or a ceiling. The base and the arm are static. The head turns with
+`setYaw` and tilts with `setPitch`. A red light comes on when a computer
+reads the camera.
+
+To aim the camera by hand, click the camera with an empty hand. A scope opens
+and shows the camera picture. Drag the mouse to turn and tilt the head. Turn
+the mouse wheel to zoom. Press ESC to close the scope. You cannot aim a
+locked camera.
 
 The camera makes a real picture of the world. It shows blocks with their true
 textures, and entities with their true models and skins. It also shows player
-skins, armor, held items, and name tags. On a dedicated server the camera
-shows map colors, because the server has no textures.
+skins, armor, held items, and name tags. On a dedicated server the mod
+downloads the standard Minecraft assets one time from Mojang, then bakes the
+models itself, so the picture keeps its full quality there.
+
+The camera makes a black and white picture by default. A black and white
+picture uses all 16 palette colors for one hue. This makes the picture more
+legible. The camera sets the exposure automatically: a dark scene becomes
+brighter. Use `setColorMode` to select `sepia` or full `color`.
 
 The view distance is 128 blocks.
 
@@ -72,6 +84,7 @@ Peripheral type: `camera`.
 | `getYaw()` / `setYaw(deg)` | number | Turn left or right. Range -60 to 60. |
 | `getPitch()` / `setPitch(deg)` | number | Turn up or down. Range -45 to 45. Up is positive. |
 | `getZoom()` / `setZoom(level)` | number | Zoom the lens. Range 1 to 10. |
+| `getColorMode()` / `setColorMode(mode)` | string | `bw` (default), `sepia`, or `color`. |
 | `isLocked()` / `setLocked(on)` | boolean | Lock stops other users from moving the camera. |
 | `getMotionThreshold()` / `setMotionThreshold(f)` | number | The change that starts a motion event. |
 | `getRange()` | number | The view distance in blocks. |
@@ -94,7 +107,22 @@ To show a frame on a monitor, do these steps:
 2. For each row, move the cursor to the start of the row.
 3. Draw the row with `blit(text, fg, bg)`.
 
-### 4.3 The motion event
+### 4.3 The Camera Link and the Microphone Link
+
+The Camera Link item connects a camera to a wired modem without cables. The
+Microphone Link item does the same for a microphone. An unbroken run of
+solid blocks must connect the two blocks.
+
+Hold the item to see a marker in each device of that type and each wired
+modem, and the path of each link. Click the device, then click a wired
+modem. The device then shows on the modem's network as a peripheral. To
+remove a link, sneak and click the device or the modem with the item.
+
+One modem holds a maximum of 6 linked devices. This limit does not change
+the number of wired peripherals. If the path breaks, the link searches for a
+new path. After 5 searches with no path, the link ends.
+
+### 4.4 The motion event
 
 The camera sends a `camera_motion` event when the picture changes. The camera
 sends this event only when a computer is attached.
@@ -105,6 +133,20 @@ Event fields:
 2. `side` — the side of the camera.
 3. `changedFraction` — the part of the picture that changed. Range 0 to 1.
 
+### 4.5 The player event
+
+The camera sends a `camera_player` event when the set of players in the
+picture changes. The camera knows the players it draws. It does not compare
+pictures for this event. The camera sends this event only when a computer is
+attached.
+
+Event fields:
+
+1. `camera_player` — the event name.
+2. `side` — the side of the camera.
+3. `players` — a list of the player names in the picture. The list is empty
+   when the last player leaves the picture.
+
 ---
 
 ## 5. Capture Card
@@ -113,8 +155,8 @@ The capture card records the screen of a monitor. Put the capture card next to
 a monitor. Put a tape in the capture card. The card records the monitor to the
 tape.
 
-The card can also make a GIF file on your computer. Open the card screen and
-select export. You cannot export from Lua.
+The card can also make an MP4 video file on your computer. Open the card
+screen and select export. You cannot export from Lua.
 
 ### 5.1 Capture card functions
 
@@ -142,6 +184,10 @@ Each `list` entry has these fields: `name`, `bytes`, `fps`, `frames`, and
 
 A tape holds recordings. One tape holds 10 MB. A tape can hold only recordings.
 You cannot write other files to a tape.
+
+All recordings have one standard size: 162 x 81 cells. The recorder scales
+each captured frame to this size. Playback scales the picture to the size of
+the output monitor.
 
 To name a tape, put the tape in an anvil. Type a name. The name shows on the
 tape label. A name can have a maximum of 12 characters. The anvil shows
@@ -256,7 +302,12 @@ The microphone sends real player voices to Lua. The mod has 2 microphones:
 - The desktop microphone stands on a floor.
 
 You need the Simple Voice Chat mod for the microphones. The microphone picks up
-voices within 8 blocks. The mod adds a radio filter to each voice.
+voices within 8 blocks. A voice becomes quieter when the player is farther
+from the microphone. The mod adds a radio filter to each voice.
+
+The microphone hears in stereo. A voice on the left side of the microphone's
+front is stronger in the left channel. A centered voice is equal in the two
+channels.
 
 To turn a microphone on or off, right-click the block. You can also use
 `setListening`.
@@ -280,9 +331,12 @@ Event fields:
 
 1. `microphone_audio` — the event name.
 2. `side` — the side of the microphone.
-3. `samples` — a list of 8-bit audio values.
+3. `samples` — a list of 8-bit audio values. This is the mono mix.
+4. `left` — the left channel of the stereo stage.
+5. `right` — the right channel of the stereo stage.
 
-Give the samples to `speaker.playAudio` to play the voice.
+Give a list to `speaker.playAudio` to play the voice. For stereo, play `left`
+and `right` on two speakers.
 
 ---
 
@@ -318,6 +372,6 @@ end
 
 ### 10.3 Record a camera to a VCR array
 
-The mod includes `dvr.lua`. This program shows a camera on a monitor and
-records the same monitor to the VCR array. Run `dvr` for 5 frames each second.
-Run `dvr 10 loop` for a loop recorder at 10 frames each second.
+To record a camera, show the camera on a monitor with the program in 10.1.
+Put the monitor against the VCR array. Then call `vcr.record(fps)`. The
+array records the monitor. Call `vcr.record(fps, true)` for a loop recorder.

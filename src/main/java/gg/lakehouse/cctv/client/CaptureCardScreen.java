@@ -43,7 +43,7 @@ public class CaptureCardScreen extends Screen {
             .bounds(centerX - 32, row, 60, 20).build());
         stopButton = addRenderableWidget(Button.builder(Component.literal("Stop"), button -> send(Action.STOP))
             .bounds(centerX + 34, row, 60, 20).build());
-        exportButton = addRenderableWidget(Button.builder(Component.literal("Export GIF"), button -> send(Action.EXPORT))
+        exportButton = addRenderableWidget(Button.builder(Component.literal("Export MP4"), button -> send(Action.EXPORT))
             .bounds(centerX - 49, row + 26, 98, 20).build());
         updateButtons();
     }

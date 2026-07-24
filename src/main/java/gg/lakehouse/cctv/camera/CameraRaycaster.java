@@ -82,6 +82,8 @@ final class CameraRaycaster {
     private final Vec3 up;
     private final double tanHalfH;
     private final double tanHalfV;
+    /** World units one pixel spans per unit of distance; times hit distance and texel density = mip choice. */
+    private final double pixelFootprint;
     private final int width;
     private final int height;
     private final int skyDarken;
@@ -92,6 +94,8 @@ final class CameraRaycaster {
     @Nullable
     private final EntityAppearanceProvider entityAppearance;
     private final Map<Long, Integer> lightCache = new HashMap<>();
+    /** Per-frame cache of position-dependent geometry (chest lids, sign text). */
+    private final Map<Long, List<TexturedQuad>> dynamicCache = new HashMap<>();
 
     private LevelChunk chunk;
     private int chunkX = Integer.MIN_VALUE;
@@ -102,6 +106,9 @@ final class CameraRaycaster {
     private int sectionZ = Integer.MIN_VALUE;
     private boolean chunkMissing;
     private int boxHitAxis;
+
+    /** Players that actually painted pixels in the last render — ground truth for camera_player events. */
+    private final List<String> visiblePlayers = new ArrayList<>();
 
     private final double[] hitT = new double[MAX_QUAD_HITS];
     private final double[] hitU = new double[MAX_QUAD_HITS];
@@ -132,6 +139,7 @@ final class CameraRaycaster {
         double horizontalFov = Math.toRadians(BASE_FOV_DEGREES / Math.max(1, zoom));
         tanHalfH = Math.tan(horizontalFov / 2);
         tanHalfV = tanHalfH * height / (double) width;
+        pixelFootprint = 2 * tanHalfH / width;
 
         skyDarken = level.getSkyDarken();
         double day = 1 - skyDarken / 11.0;
@@ -156,6 +164,11 @@ final class CameraRaycaster {
         }
         paintEntities(pixels, depth);
         return new PixelFrame(width, height, pixels);
+    }
+
+    /** Player names painted by the last render, in entity-search order. */
+    List<String> visiblePlayers() {
+        return visiblePlayers;
     }
 
     /** Cheap fixed-palette render for motion detection: one hex color character per pixel. */
@@ -245,8 +258,21 @@ final class CameraRaycaster {
                 return applyTint(fadeToHorizon(shadeColor(mapColor.col, shade), t), tintR, tintG, tintB);
             }
 
-            if (state.getRenderShape() == RenderShape.INVISIBLE && state.getFluidState().isEmpty()) continue;
+            // No INVISIBLE-shape skip here: signs, banners and skulls report
+            // INVISIBLE (they're renderer-drawn) yet our providers know their
+            // geometry. Blocks with truly nothing yield empty quads below.
             var quads = blockAppearance.quads(state);
+            var dynamic = dynamicQuadsAt(state, x, y, z);
+            if (!dynamic.isEmpty()) {
+                if (quads.isEmpty()) {
+                    quads = dynamic;
+                } else {
+                    var merged = new ArrayList<TexturedQuad>(quads.size() + dynamic.size());
+                    merged.addAll(quads);
+                    merged.addAll(dynamic);
+                    quads = merged;
+                }
+            }
             if (quads.isEmpty()) continue;
             var offset = blockAppearance.offset(state, level, pos);
             double localX = origin.x - x - offset.x;
@@ -254,11 +280,18 @@ final class CameraRaycaster {
             double localZ = origin.z - z - offset.z;
 
             int hits = 0;
-            int quadCount = Math.min(quads.size(), MAX_QUAD_HITS);
+            int quadCount = quads.size();
             for (int qi = 0; qi < quadCount; qi++) {
                 double tq = intersectQuad(quads.get(qi), localX, localY, localZ,
                     direction.x, direction.y, direction.z, uvA);
                 if (tq < 0 || tq > MAX_DISTANCE) continue;
+                // Every quad is tested; a full hit list drops its farthest
+                // entry, never a nearer one, so geometry-heavy blocks
+                // (merged static + dynamic lists) cannot clip front faces.
+                if (hits == MAX_QUAD_HITS) {
+                    if (tq >= hitT[MAX_QUAD_HITS - 1]) continue;
+                    hits--;
+                }
                 int insert = hits;
                 while (insert > 0 && hitT[insert - 1] > tq) {
                     hitT[insert] = hitT[insert - 1];
@@ -277,7 +310,8 @@ final class CameraRaycaster {
 
             for (int hit = 0; hit < hits; hit++) {
                 var quad = quads.get(hitQuad[hit]);
-                int texel = quad.texture().sample(hitU[hit], hitV[hit]);
+                int texel = quad.texture().sample(hitU[hit], hitV[hit],
+                    hitT[hit] * pixelFootprint * quad.texelDensity());
                 int alpha = quad.alphaOverride() >= 0 ? quad.alphaOverride() : (texel >>> 24);
                 if (alpha < 32) continue;
                 int rgb = texel & 0xFFFFFF;
@@ -302,6 +336,11 @@ final class CameraRaycaster {
         }
     }
 
+    private List<TexturedQuad> dynamicQuadsAt(BlockState state, int x, int y, int z) {
+        return dynamicCache.computeIfAbsent(BlockPos.asLong(x, y, z),
+            key -> blockAppearance.dynamicQuads(state, level, new BlockPos(x, y, z)));
+    }
+
     private static BlockPos litPos(int x, int y, int z, int axis, int stepX, int stepY, int stepZ) {
         return switch (axis) {
             case 0 -> new BlockPos(x - stepX, y, z);
@@ -315,11 +354,12 @@ final class CameraRaycaster {
         return 0.25 + 0.75 * light / 15.0;
     }
 
+    /** Vanilla's per-face diffuse: up 1.0, down 0.5, north/south 0.8, east/west 0.6. */
     private static double faceFactor(int axis, Vec3 direction) {
         return switch (axis) {
-            case 1 -> direction.y < 0 ? 1.0 : 0.55;
-            case 0 -> 0.85;
-            default -> 0.7;
+            case 1 -> direction.y < 0 ? 1.0 : 0.5;
+            case 0 -> 0.6;
+            default -> 0.8;
         };
     }
 
@@ -328,9 +368,9 @@ final class CameraRaycaster {
         double ay = Math.abs(ny);
         double az = Math.abs(nz);
         double sum = ax + ay + az;
-        if (sum < 1e-6) return 0.85;
-        double vertical = ny > 0 ? 1.0 : 0.55;
-        return (ax * 0.85 + ay * vertical + az * 0.7) / sum;
+        if (sum < 1e-6) return 0.8;
+        double vertical = ny > 0 ? 1.0 : 0.5;
+        return (ax * 0.6 + ay * vertical + az * 0.8) / sum;
     }
 
     private static int shadeColor(int base, double shade) {
@@ -431,9 +471,19 @@ final class CameraRaycaster {
     private void paintEntities(int[] pixels, double[] depth) {
         var searchBox = new AABB(cameraPos).inflate(MAX_DISTANCE);
         var entities = level.getEntities((Entity) null, searchBox,
-            entity -> entity instanceof LivingEntity living && living.isAlive()
-                && !living.isInvisible() && !entity.isSpectator());
+            entity -> (entity instanceof LivingEntity living && living.isAlive()
+                && !living.isInvisible() && !entity.isSpectator())
+                || entity instanceof net.minecraft.world.entity.vehicle.Boat
+                || entity instanceof net.minecraft.world.entity.vehicle.AbstractMinecart
+                || entity instanceof net.minecraft.world.entity.decoration.Painting
+                || entity instanceof net.minecraft.world.entity.decoration.ItemFrame
+                || entity instanceof net.minecraft.world.entity.item.ItemEntity
+                || entity instanceof net.minecraft.world.entity.ExperienceOrb
+                || entity instanceof net.minecraft.world.entity.decoration.LeashFenceKnotEntity
+                || entity instanceof net.minecraft.world.entity.boss.enderdragon.EndCrystal
+                || entity instanceof net.minecraft.world.entity.projectile.Projectile);
         var nametags = new ArrayList<Nametag>();
+        visiblePlayers.clear();
         for (var entity : entities) {
             var bounds = entity.getBoundingBox();
             double along = bounds.getCenter().subtract(origin).dot(forward);
@@ -441,11 +491,15 @@ final class CameraRaycaster {
             double light = lightFactor(BlockPos.containing(bounds.getCenter()));
 
             List<TexturedQuad> modelQuads = entityAppearance == null ? null
-                : entityAppearance.capture((LivingEntity) entity);
+                : entityAppearance.capture(entity);
+            boolean painted;
             if (modelQuads != null && !modelQuads.isEmpty()) {
-                paintEntityModel(pixels, depth, entity, modelQuads, light);
+                painted = paintEntityModel(pixels, depth, entity, modelQuads, light);
             } else {
-                paintEntityBox(pixels, depth, entity, bounds, light);
+                painted = paintEntityBox(pixels, depth, entity, bounds, light);
+            }
+            if (painted && entity instanceof Player player) {
+                visiblePlayers.add(player.getGameProfile().getName());
             }
 
             String name = null;
@@ -464,9 +518,9 @@ final class CameraRaycaster {
 
     // === Nametags ===
 
-    private static final String GLYPH_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.";
-    /** 4x5 pixel glyphs, five 4-char rows each, same order as GLYPH_CHARS. */
-    private static final String[] GLYPHS = {
+    static final String GLYPH_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.";
+    /** 4x5 pixel glyphs, five 4-char rows each, same order as GLYPH_CHARS. Shared with sign text. */
+    static final String[] GLYPHS = {
         ".##." + "#..#" + "####" + "#..#" + "#..#",
         "###." + "#..#" + "###." + "#..#" + "###.",
         ".###" + "#..." + "#..." + "#..." + ".###",
@@ -517,15 +571,67 @@ final class CameraRaycaster {
         if (Math.abs(sx) > 1.3 || Math.abs(sy) > 1.3) return;
         int centerCol = (int) ((sx + 1) / 2 * width);
         int baseRow = (int) ((1 - sy) / 2 * height);
-
         double pixelsPerBlock = height / (2 * tanHalfV * along);
+        double tagDistance = along - 0.2;
+
+        var font = blockAppearance != null ? FontSheet.get(blockAppearance::texture) : FontSheet.get();
+        if (font != null) {
+            paintFontNametag(pixels, depth, font, nametag.text(), centerCol, baseRow, pixelsPerBlock, tagDistance);
+        } else {
+            paintLegacyNametag(pixels, depth, nametag.text(), centerCol, baseRow, pixelsPerBlock, tagDistance);
+        }
+    }
+
+    private void paintFontNametag(int[] pixels, double[] depth, FontSheet font, String name,
+                                  int centerCol, int baseRow, double pixelsPerBlock, double tagDistance) {
+        int scale = Mth.clamp((int) Math.round(0.35 * pixelsPerBlock / FontSheet.HEIGHT), 1, 4);
+        var text = name;
+        while (text.length() > 1 && font.lineWidth(text) > 120) text = text.substring(0, text.length() - 1);
+        int textWidth = font.lineWidth(text) * scale;
+        int left = centerCol - textWidth / 2;
+        int top = baseRow - FontSheet.HEIGHT * scale;
+
+        for (int row = top - scale; row < baseRow + scale; row++) {
+            for (int col = left - scale; col < left + textWidth + scale; col++) {
+                if (row < 0 || row >= height || col < 0 || col >= width) continue;
+                int index = row * width + col;
+                if (depth[index] <= tagDistance) continue;
+                pixels[index] = 0x101018;
+            }
+        }
+        int pen = left;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            int advance = font.advance(c);
+            if (advance == 0) continue;
+            for (int gy = 0; gy < FontSheet.HEIGHT; gy++) {
+                for (int gx = 0; gx < advance - 1; gx++) {
+                    if (!font.isSet(c, gx, gy)) continue;
+                    for (int py = 0; py < scale; py++) {
+                        for (int px = 0; px < scale; px++) {
+                            int row = top + gy * scale + py;
+                            int col = pen + gx * scale + px;
+                            if (row < 0 || row >= height || col < 0 || col >= width) continue;
+                            int index = row * width + col;
+                            if (depth[index] <= tagDistance) continue;
+                            pixels[index] = 0xF0F0F0;
+                        }
+                    }
+                }
+            }
+            pen += advance * scale;
+        }
+    }
+
+    /** The built-in 4x5 glyphs, for frames before any provider supplies ascii.png. */
+    private void paintLegacyNametag(int[] pixels, double[] depth, String name,
+                                    int centerCol, int baseRow, double pixelsPerBlock, double tagDistance) {
         int scale = Mth.clamp((int) Math.round(0.35 * pixelsPerBlock / 5), 1, 4);
-        var text = nametag.text().toUpperCase().replace(' ', '_');
+        var text = name.toUpperCase().replace(' ', '_');
         if (text.length() > 16) text = text.substring(0, 16);
         int textWidth = text.length() * 5 * scale - scale;
         int left = centerCol - textWidth / 2;
         int top = baseRow - 5 * scale;
-        double tagDistance = along - 0.2;
 
         for (int row = top - scale; row < baseRow + scale; row++) {
             for (int col = left - scale; col < left + textWidth + scale; col++) {
@@ -558,8 +664,9 @@ final class CameraRaycaster {
         }
     }
 
-    private void paintEntityModel(int[] pixels, double[] depth, Entity entity,
-                                  List<TexturedQuad> quads, double light) {
+    private boolean paintEntityModel(int[] pixels, double[] depth, Entity entity,
+                                     List<TexturedQuad> quads, double light) {
+        boolean painted = false;
         var rel = entity.position().subtract(origin);
         for (var quad : quads) {
             int minCol = Integer.MAX_VALUE;
@@ -595,18 +702,22 @@ final class CameraRaycaster {
                     if (t < 0) continue;
                     int index = row * width + col;
                     if (t >= depth[index]) continue;
-                    int texel = quad.texture().sample(uvA[0], uvA[1]);
+                    int texel = quad.texture().sample(uvA[0], uvA[1],
+                        t * pixelFootprint * quad.texelDensity());
                     if ((texel >>> 24) < 128) continue;
                     int rgb = texel & 0xFFFFFF;
                     if (quad.colorMul() != 0xFFFFFF) rgb = mulColor(rgb, quad.colorMul());
                     pixels[index] = fadeToHorizon(shadeColor(rgb, faceShade), t);
                     depth[index] = t;
+                    painted = true;
                 }
             }
         }
+        return painted;
     }
 
-    private void paintEntityBox(int[] pixels, double[] depth, Entity entity, AABB bounds, double light) {
+    private boolean paintEntityBox(int[] pixels, double[] depth, Entity entity, AABB bounds, double light) {
+        boolean painted = false;
         var colors = colorsFor(entity);
         boolean humanoid = entity.getBbHeight() >= 1.4 && entity.getBbWidth() <= 1.0;
         AABB bodyBox = bounds;
@@ -643,7 +754,7 @@ final class CameraRaycaster {
         maxCol = Math.min(width - 1, maxCol + 1);
         minRow = Math.max(0, minRow - 1);
         maxRow = Math.min(height - 1, maxRow + 1);
-        if (minCol > maxCol || minRow > maxRow) return;
+        if (minCol > maxCol || minRow > maxRow) return false;
 
         for (int row = minRow; row <= maxRow; row++) {
             for (int col = minCol; col <= maxCol; col++) {
@@ -671,8 +782,10 @@ final class CameraRaycaster {
                 double shade = light * faceFactor(bestAxis < 0 ? 2 : bestAxis, direction);
                 pixels[index] = fadeToHorizon(shadeColor(color, shade), bestT);
                 depth[index] = bestT;
+                painted = true;
             }
         }
+        return painted;
     }
 
     private static int[] colorsFor(Entity entity) {

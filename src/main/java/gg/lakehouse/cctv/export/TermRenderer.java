@@ -51,6 +51,12 @@ public final class TermRenderer {
         return fontMask;
     }
 
+    /**
+     * Renders one frame at full color fidelity — each cell uses its frame's
+     * exact palette entries. Captured palettes are stored in CC's internal
+     * array order, which runs BLACK(0)..WHITE(15) — the reverse of blit's
+     * hex digits where '0' is white — so a digit d reads palette[15 - d].
+     */
     public static BufferedImage render(TermFrame frame) throws IOException {
         var mask = fontMask();
         var image = new BufferedImage(frame.width() * GLYPH_W, frame.height() * GLYPH_H, BufferedImage.TYPE_INT_RGB);
@@ -60,8 +66,8 @@ public final class TermRenderer {
             String bgLine = frame.bg()[cellY];
             for (int cellX = 0; cellX < frame.width(); cellX++) {
                 int glyph = cellX < text.length() ? text.charAt(cellX) & 0xFF : ' ';
-                int fg = frame.palette()[colourIndex(fgLine, cellX)];
-                int bg = frame.palette()[colourIndex(bgLine, cellX)];
+                int fg = frame.palette()[15 - colourIndex(fgLine, cellX)] & 0xFFFFFF;
+                int bg = frame.palette()[15 - colourIndex(bgLine, cellX)] & 0xFFFFFF;
                 for (int y = 0; y < GLYPH_H; y++) {
                     for (int x = 0; x < GLYPH_W; x++) {
                         boolean on = mask[(glyph * GLYPH_H + y) * GLYPH_W + x];

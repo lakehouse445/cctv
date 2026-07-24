@@ -3,6 +3,7 @@ package gg.lakehouse.cctv.vcr;
 import dan200.computercraft.core.terminal.Terminal;
 import dan200.computercraft.shared.peripheral.monitor.MonitorBlockEntity;
 import gg.lakehouse.cctv.CCTV;
+import gg.lakehouse.cctv.media.FrameScaler;
 import gg.lakehouse.cctv.media.TermFrame;
 import gg.lakehouse.cctv.media.Terminals;
 import gg.lakehouse.cctv.registry.ModRegistry;
@@ -276,7 +277,7 @@ public class VcrBlockEntity extends BlockEntity {
             if (error != null) CCTV.LOGGER.warn("VCR array at {}: {}", worldPosition, error);
             return;
         }
-        frames.add(TermFrame.capture(terminal));
+        frames.add(FrameScaler.toRecordingSize(TermFrame.capture(terminal)));
         if (loop) {
             if (frames.size() >= SEGMENT_FRAMES) {
                 var error = commitLoopSegment();

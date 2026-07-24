@@ -133,6 +133,8 @@ Footage is saved as 16-color images, compressed, and — crucially — between f
 
 About those 16 colors: monitors can only show 16 colors at once, but on advanced monitors you can choose *which* 16. So each recording picks the best 16 colors for what it's actually looking at — a desert scene gets sand tones, a night scene gets grays and blues — which improves the picture dramatically for the cost of a few extra bytes. (One caveat: a monitor has one palette at a time, so several feeds squeezed onto a single monitor share colors. A bank of separate monitors — the classic camera wall — has no such limit, and looks better anyway.)
 
+Cameras film in black and white by default: spending all 16 shades on one hue reads far better on a monitor than 16 colors split across a scene, and it looks the part. A camera can be switched to sepia or full color from Lua.
+
 Footage can also use a fine crosshatch pattern to fake in-between shades, which makes gradients like skies and shadows look much smoother. The pattern is fixed in place, so it doesn't add cost to the "only store what changed" trick. Exported video files get an even nicer smoothing pass, since file size on your PC doesn't matter.
 
 Tested against real screenshots — including a busy aerial shot of an entire city center, which is about the hardest thing a camera could look at — the worst case works out to roughly 2 KB per second of continuous footage. That means one 10 MB tape holds:

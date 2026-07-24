@@ -21,4 +21,18 @@ public interface BlockAppearanceProvider {
 
     /** Resolves a quad's tint index to an RGB multiplier at this position. */
     int tint(BlockState state, ServerLevel level, BlockPos pos, int tintIndex);
+
+    /**
+     * Position-dependent geometry that can't live in the per-state cache:
+     * chest lids that stand open while in use, sign text. Empty by default.
+     */
+    default List<TexturedQuad> dynamicQuads(BlockState state, ServerLevel level, BlockPos pos) {
+        return List.of();
+    }
+
+    /** Loads a texture by short name ("minecraft:font/ascii"), or null when unavailable. */
+    @javax.annotation.Nullable
+    default TexturePixels texture(String name) {
+        return null;
+    }
 }

@@ -11,6 +11,7 @@ import gg.lakehouse.cctv.CCTV;
 import gg.lakehouse.cctv.microphone.MicrophoneBlockEntity;
 import gg.lakehouse.cctv.microphone.MicrophoneRegistry;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @ForgeVoicechatPlugin
 public class CCTVVoicechatPlugin implements VoicechatPlugin {
+    /** Inside this many blocks the microphone hears at full volume. */
+    private static final int CLOSE_RANGE = 2;
+
     private final Map<UUID, PlayerPipeline> pipelines = new ConcurrentHashMap<>();
     private VoicechatApi api;
 
@@ -63,8 +67,47 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
             samples = pipeline.filter.process(pcm);
         }
         for (var microphone : microphones) {
-            microphone.pushAudio(samples);
+            process(samples, microphone, player);
         }
+    }
+
+    /**
+     * Positions one voice on the microphone's stereo stage and pushes it.
+     * Distance sets the volume: full within {@link #CLOSE_RANGE} blocks, then
+     * a linear fade to silence at pickup range. The lateral angle from the
+     * microphone's facing sets a balance-style pan — a centered voice is full
+     * in both ears, an off-axis voice loses the far ear — so the stage reads
+     * like the mic's own point of view.
+     */
+    private static void process(byte[] samples, MicrophoneBlockEntity microphone, ServerPlayer player) {
+        var pos = microphone.getBlockPos();
+        double dx = player.getX() - (pos.getX() + 0.5);
+        double dy = player.getEyeY() - (pos.getY() + 0.5);
+        double dz = player.getZ() - (pos.getZ() + 0.5);
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double gain = (MicrophoneBlockEntity.PICKUP_RANGE - distance)
+            / (double) (MicrophoneBlockEntity.PICKUP_RANGE - CLOSE_RANGE);
+        gain = Math.max(0, Math.min(1, gain));
+
+        double pan = 0;
+        var state = microphone.getBlockState();
+        if (state.hasProperty(HorizontalDirectionalBlock.FACING)) {
+            var right = state.getValue(HorizontalDirectionalBlock.FACING).getClockWise();
+            double lateral = Math.sqrt(dx * dx + dz * dz);
+            if (lateral > 0.01) pan = (dx * right.getStepX() + dz * right.getStepZ()) / lateral;
+        }
+        double leftGain = gain * Math.min(1, 1 - pan);
+        double rightGain = gain * Math.min(1, 1 + pan);
+
+        var mono = new byte[samples.length];
+        var left = new byte[samples.length];
+        var right = new byte[samples.length];
+        for (int i = 0; i < samples.length; i++) {
+            mono[i] = (byte) Math.round(samples[i] * gain);
+            left[i] = (byte) Math.round(samples[i] * leftGain);
+            right[i] = (byte) Math.round(samples[i] * rightGain);
+        }
+        microphone.pushAudio(mono, left, right);
     }
 
     private void onPlayerDisconnected(PlayerDisconnectedEvent event) {

@@ -25,6 +25,38 @@ public final class CCTV {
         ModRegistry.register(modBus);
         PacketHandler.register();
         modBus.addListener(this::commonSetup);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+            (net.minecraftforge.event.server.ServerStartedEvent event) ->
+                gg.lakehouse.cctv.camera.server.ServerCameraAssets.begin(event.getServer()));
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+            (net.minecraftforge.event.TickEvent.LevelTickEvent event) -> {
+                if (event.phase == net.minecraftforge.event.TickEvent.Phase.END
+                    && event.level instanceof net.minecraft.server.level.ServerLevel serverLevel
+                    && serverLevel.getGameTime() % 5 == 0) {
+                    gg.lakehouse.cctv.link.CameraLinks.get(serverLevel).tick(serverLevel);
+                }
+            });
+        // Links render the moment the item is held: the client needs the
+        // link list before any right-click ever syncs it.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+            (net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) ->
+                syncLinks(event.getEntity()));
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+            (net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) ->
+                syncLinks(event.getEntity()));
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+            (net.minecraftforge.event.entity.player.PlayerEvent.PlayerRespawnEvent event) ->
+                syncLinks(event.getEntity()));
+        net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
+            () -> () -> net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                gg.lakehouse.cctv.client.CameraLinkRenderer::onRenderLevel));
+    }
+
+    private static void syncLinks(net.minecraft.world.entity.player.Player player) {
+        if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer
+            && serverPlayer.serverLevel() != null) {
+            gg.lakehouse.cctv.link.CameraLinks.get(serverPlayer.serverLevel()).syncTo(serverPlayer);
+        }
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {

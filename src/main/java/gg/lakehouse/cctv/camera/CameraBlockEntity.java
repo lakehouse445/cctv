@@ -4,6 +4,7 @@ import gg.lakehouse.cctv.camera.client.ClientCameraAppearances;
 import gg.lakehouse.cctv.registry.ModRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -13,6 +14,7 @@ import net.minecraftforge.fml.DistExecutor;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A security camera. Renders 16-color frames of the world server-side on
@@ -46,16 +48,19 @@ public class CameraBlockEntity extends BlockEntity {
         DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> ClientCameraAppearances::entityProvider);
 
     private final CameraPeripheral peripheral = new CameraPeripheral(this);
+    private final CameraFrameEncoder.Exposure exposure = new CameraFrameEncoder.Exposure();
     private float yaw;
     private float pitch;
     private double zoom = 1;
     private boolean locked;
     private double motionThreshold = 0.05;
+    private ColorMode colorMode = ColorMode.BW;
 
     private CameraFrameEncoder.EncodedFrame cachedFrame;
     private long cachedTime = Long.MIN_VALUE;
     private long lastWatchedTime = Long.MIN_VALUE;
     private String[] previousMotionLines;
+    private List<String> previousPlayers = List.of();
     private long nextMotionTime;
 
     public CameraBlockEntity(BlockPos pos, BlockState state) {
@@ -72,7 +77,7 @@ public class CameraBlockEntity extends BlockEntity {
 
     public void setYaw(float yaw) {
         this.yaw = Mth.clamp(yaw, -MAX_YAW, MAX_YAW);
-        setChanged();
+        syncToClient();
     }
 
     public float getPitch() {
@@ -81,7 +86,7 @@ public class CameraBlockEntity extends BlockEntity {
 
     public void setPitch(float pitch) {
         this.pitch = Mth.clamp(pitch, -MAX_PITCH, MAX_PITCH);
-        setChanged();
+        syncToClient();
     }
 
     public double getZoom() {
@@ -99,6 +104,17 @@ public class CameraBlockEntity extends BlockEntity {
 
     public void setLocked(boolean locked) {
         this.locked = locked;
+        setChanged();
+    }
+
+    public ColorMode getColorMode() {
+        return colorMode;
+    }
+
+    public void setColorMode(ColorMode mode) {
+        if (colorMode == mode) return;
+        colorMode = mode;
+        cachedFrame = null;
         setChanged();
     }
 
@@ -122,16 +138,21 @@ public class CameraBlockEntity extends BlockEntity {
             return cachedFrame;
         }
         // A terminal cell shows 2x3 pixels through the drawing characters.
-        cachedFrame = CameraFrameEncoder.encode(raycaster(serverLevel, width * 2, height * 3).render(), width, height);
+        cachedFrame = CameraFrameEncoder.encode(raycaster(serverLevel, width * 2, height * 3).render(), width, height, colorMode, exposure);
         cachedTime = now;
         return cachedFrame;
     }
 
     private CameraRaycaster raycaster(ServerLevel serverLevel, int pixelWidth, int pixelHeight) {
         float baseYaw = getBlockState().getValue(CameraBlock.FACING).toYRot();
-        // Lua pitch is positive-up; Minecraft's is positive-down.
+        // Lua pitch is positive-up; Minecraft's is positive-down. Dedicated
+        // servers use the baked server-side assets once they're ready.
+        var blocks = BLOCK_APPEARANCE != null ? BLOCK_APPEARANCE
+            : gg.lakehouse.cctv.camera.server.ServerCameraAssets.blocks();
+        var entities = ENTITY_APPEARANCE != null ? ENTITY_APPEARANCE
+            : gg.lakehouse.cctv.camera.server.ServerCameraAssets.entities();
         return new CameraRaycaster(serverLevel, worldPosition, baseYaw + yaw, -pitch, zoom,
-            pixelWidth, pixelHeight, BLOCK_APPEARANCE, ENTITY_APPEARANCE);
+            pixelWidth, pixelHeight, blocks, entities);
     }
 
     public void serverTick() {
@@ -140,7 +161,13 @@ public class CameraBlockEntity extends BlockEntity {
 
         if (peripheral.hasComputers() && now >= nextMotionTime) {
             nextMotionTime = now + MOTION_INTERVAL_TICKS;
-            var lines = raycaster(serverLevel, MOTION_WIDTH, MOTION_HEIGHT).renderQuantizedLines();
+            var motionCaster = raycaster(serverLevel, MOTION_WIDTH, MOTION_HEIGHT);
+            var lines = motionCaster.renderQuantizedLines();
+            var players = motionCaster.visiblePlayers().stream().sorted().toList();
+            if (!players.equals(previousPlayers)) {
+                previousPlayers = players;
+                peripheral.queuePlayerEvent(players);
+            }
             if (previousMotionLines != null && !Arrays.equals(previousMotionLines, lines)) {
                 int changed = 0;
                 for (int row = 0; row < MOTION_HEIGHT; row++) {
@@ -156,6 +183,7 @@ public class CameraBlockEntity extends BlockEntity {
             previousMotionLines = lines;
         } else if (!peripheral.hasComputers()) {
             previousMotionLines = null;
+            previousPlayers = List.of();
         }
 
         if (now % 20 == 0) {
@@ -167,6 +195,26 @@ public class CameraBlockEntity extends BlockEntity {
         }
     }
 
+    /** The head pose renders client-side, so yaw/pitch changes push to watchers. */
+    private void syncToClient() {
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    @Override
+    public CompoundTag getUpdateTag() {
+        var tag = super.getUpdateTag();
+        saveAdditional(tag);
+        return tag;
+    }
+
+    @Override
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
@@ -175,6 +223,7 @@ public class CameraBlockEntity extends BlockEntity {
         tag.putDouble("Zoom", zoom);
         tag.putBoolean("Locked", locked);
         tag.putDouble("MotionThreshold", motionThreshold);
+        tag.putString("ColorMode", colorMode.getName());
     }
 
     @Override
@@ -185,5 +234,7 @@ public class CameraBlockEntity extends BlockEntity {
         zoom = tag.contains("Zoom") ? Mth.clamp(tag.getDouble("Zoom"), 1, MAX_ZOOM) : 1;
         locked = tag.getBoolean("Locked");
         motionThreshold = tag.contains("MotionThreshold") ? Mth.clamp(tag.getDouble("MotionThreshold"), 0.001, 1) : 0.05;
+        var mode = ColorMode.byName(tag.getString("ColorMode"));
+        colorMode = mode != null ? mode : ColorMode.BW;
     }
 }

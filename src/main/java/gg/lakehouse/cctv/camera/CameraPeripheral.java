@@ -61,6 +61,13 @@ public class CameraPeripheral implements IPeripheral {
         }
     }
 
+    /** Fired whenever the set of players in the picture changes: event, side, {names}. */
+    void queuePlayerEvent(List<String> names) {
+        for (var computer : computers) {
+            computer.queueEvent("camera_player", computer.getAttachmentName(), names);
+        }
+    }
+
     /**
      * The current picture, sized in terminal cells. text/fg/bg are blit-ready
      * rows (2x3 pixels per cell via the drawing characters); palette lists the
@@ -132,6 +139,20 @@ public class CameraPeripheral implements IPeripheral {
     @LuaFunction(mainThread = true)
     public final void setLocked(boolean locked) {
         blockEntity.setLocked(locked);
+    }
+
+    @LuaFunction(mainThread = true)
+    public final String getColorMode() {
+        return blockEntity.getColorMode().getName();
+    }
+
+    /** "bw" (default), "sepia", or "color". */
+    @LuaFunction(mainThread = true)
+    public final void setColorMode(String mode) throws LuaException {
+        requireUnlocked();
+        var parsed = ColorMode.byName(mode);
+        if (parsed == null) throw new LuaException("Color mode must be bw, sepia or color");
+        blockEntity.setColorMode(parsed);
     }
 
     @LuaFunction(mainThread = true)

@@ -10,8 +10,7 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fps) {
-    /** Keep clientbound custom payloads comfortably under vanilla's 1 MiB cap. */
-    private static final int MAX_EXPORT_BYTES = 800_000;
+    private static final java.util.concurrent.atomic.AtomicInteger EXPORT_IDS = new java.util.concurrent.atomic.AtomicInteger();
 
     public enum Action {
         RECORD, STOP, EXPORT
@@ -49,8 +48,14 @@ public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fp
         if (!captureCard.hasTape()) return "No tape in the capture card";
         var data = captureCard.exportLatest();
         if (data == null) return "Nothing on this tape";
-        if (data.length > MAX_EXPORT_BYTES) return "Recording too large to export - try a shorter clip";
-        PacketHandler.sendTo(player, new ClientboundExportRecordingPacket(data));
+        int chunkBytes = ClientboundExportRecordingPacket.CHUNK_BYTES;
+        int total = (data.length + chunkBytes - 1) / chunkBytes;
+        int exportId = EXPORT_IDS.incrementAndGet();
+        for (int index = 0; index < total; index++) {
+            int from = index * chunkBytes;
+            var chunk = java.util.Arrays.copyOfRange(data, from, Math.min(data.length, from + chunkBytes));
+            PacketHandler.sendTo(player, new ClientboundExportRecordingPacket(exportId, index, total, chunk));
+        }
         return null;
     }
 }

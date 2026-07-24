@@ -74,6 +74,7 @@ public final class ClientCameraAppearances {
     /** Concurrent: the skin loader touches this from a background thread. */
     private static final Map<ResourceLocation, TexturePixels> TEXTURES = new ConcurrentHashMap<>();
     private static final Map<BlockState, List<TexturedQuad>> BLOCK_QUADS = new HashMap<>();
+    private static final Map<String, List<TexturedQuad>> MODEL_QUADS = new HashMap<>();
     private static final Map<RenderType, TexturePixels> LAYER_TEXTURES = new HashMap<>();
     private static final Map<UUID, PlayerSkin> SKINS = new ConcurrentHashMap<>();
     private static final Set<UUID> SKINS_PENDING = ConcurrentHashMap.newKeySet();
@@ -117,32 +118,142 @@ public final class ClientCameraAppearances {
         }
 
         @Override
+        public TexturePixels texture(String name) {
+            return shortTexture(name);
+        }
+
+        @Override
         public int tint(BlockState state, ServerLevel level, BlockPos pos, int tintIndex) {
             if (tintIndex == TexturedQuad.TINT_WATER) return level.getBiome(pos).value().getWaterColor();
             int color = Minecraft.getInstance().getBlockColors().getColor(state, level, pos, tintIndex);
             return color == -1 ? 0xFFFFFF : color;
         }
+
+        @Override
+        public List<TexturedQuad> dynamicQuads(BlockState state, ServerLevel level, BlockPos pos) {
+            if (state.getBlock() instanceof gg.lakehouse.cctv.camera.CameraBlock
+                && level.getBlockEntity(pos) instanceof gg.lakehouse.cctv.camera.CameraBlockEntity camera) {
+                return gg.lakehouse.cctv.camera.CameraRigAppearances.build(state, camera,
+                    ClientCameraAppearances::standaloneModelQuads);
+            }
+            if (!gg.lakehouse.cctv.camera.BlockEntityAppearances.isDynamic(state)
+                && !(state.getBlock() instanceof net.minecraft.world.level.block.SignBlock)) {
+                return List.of();
+            }
+            return gg.lakehouse.cctv.camera.BlockEntityAppearances.dynamic(state, level, pos,
+                ClientCameraAppearances::shortTexture,
+                dynamicState -> BLOCK_QUADS.computeIfAbsent(dynamicState, ClientCameraAppearances::buildBlockQuads));
+        }
+    }
+
+    /** Standalone models registered with the model manager (the camera's arm and head). */
+    private static List<TexturedQuad> standaloneModelQuads(String name) {
+        return MODEL_QUADS.computeIfAbsent(name, key -> {
+            var result = new ArrayList<TexturedQuad>();
+            try {
+                var model = Minecraft.getInstance().getModelManager().getModel(new ResourceLocation(key));
+                var random = RandomSource.create(42);
+                for (var side : QUAD_SIDES) {
+                    for (var quad : model.getQuads(null, side, random)) {
+                        result.add(convert(quad, null, 0xFFFFFF));
+                    }
+                }
+            } catch (Exception e) {
+                CCTV.LOGGER.warn("Camera failed to bake model {}", key, e);
+            }
+            return result;
+        });
     }
 
     private static List<TexturedQuad> buildBlockQuads(BlockState state) {
         var result = new ArrayList<TexturedQuad>();
+        // Rendered per-position through dynamicQuads instead.
+        if (gg.lakehouse.cctv.camera.BlockEntityAppearances.isDynamic(state)) return result;
+        // Monitor content is renderer-drawn and invisible to the camera; the
+        // baked model IS the powered-off look. Its textures are packed sheets
+        // though, so mips would blend bezel and screen regions into noise at
+        // a distance — sample those at full resolution instead.
+        var name = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(state.getBlock());
+        boolean sheetTexture = name != null && "computercraft".equals(name.getNamespace())
+            && name.getPath().startsWith("monitor");
         try {
             var fluid = state.getFluidState();
             if (!(state.getBlock() instanceof LiquidBlock) && state.getRenderShape() == RenderShape.MODEL) {
                 var model = Minecraft.getInstance().getBlockRenderer().getBlockModel(state);
                 var random = RandomSource.create(42);
                 for (var side : QUAD_SIDES) {
-                    for (var quad : model.getQuads(state, side, random)) result.add(convert(quad, null, 0xFFFFFF));
+                    for (var quad : model.getQuads(state, side, random)) {
+                        var converted = convert(quad, null, 0xFFFFFF);
+                        result.add(sheetTexture ? withoutMips(converted) : converted);
+                    }
                 }
             }
+            if (sheetTexture) coverMonitorFace(result, state);
             if (!fluid.isEmpty()) addFluid(result, fluid);
-            if (result.isEmpty()) addCollisionBoxes(result, state);
+            gg.lakehouse.cctv.camera.BlockEntityAppearances.appendExtras(result, state,
+                ClientCameraAppearances::shortTexture);
+            if (result.isEmpty()) {
+                gg.lakehouse.cctv.camera.BlockEntityAppearances.build(result, state,
+                    ClientCameraAppearances::shortTexture);
+            }
+            // INVISIBLE shapes we don't cover (barriers, markers) stay unseen.
+            if (result.isEmpty() && state.getRenderShape() != RenderShape.INVISIBLE) {
+                addCollisionBoxes(result, state);
+            }
         } catch (Exception e) {
             CCTV.LOGGER.warn("Camera failed to build quads for {}", state, e);
             result.clear();
             addCollisionBoxes(result, state);
         }
         return result;
+    }
+
+    private static final TexturePixels MONITOR_SCREEN = TexturePixels.solid(0x111111);
+
+    /**
+     * A monitor's dark screen is painted by its renderer even when blank, so
+     * the camera would show bare casing on the front — blinding white after
+     * night auto-gain. Replace the front-facing casing quads with the dark
+     * off screen; the bezel survives on the other faces.
+     */
+    private static void coverMonitorFace(List<TexturedQuad> result, BlockState state) {
+        net.minecraft.core.Direction facing = null;
+        for (var property : state.getProperties()) {
+            if (property instanceof net.minecraft.world.level.block.state.properties.DirectionProperty direction
+                && property.getName().equals("facing")) {
+                facing = state.getValue(direction);
+                break;
+            }
+        }
+        if (facing == null) return;
+        float fx = facing.getStepX();
+        float fy = facing.getStepY();
+        float fz = facing.getStepZ();
+        result.removeIf(quad -> quad.nx() * fx + quad.ny() * fy + quad.nz() * fz > 0.5f);
+        var u = new float[]{0, 1, 1, 0};
+        var v = new float[]{0, 0, 1, 1};
+        switch (facing) {
+            case NORTH -> result.add(TexturedQuad.of(new float[]{0, 1, 1, 0}, new float[]{0, 0, 1, 1}, new float[]{0, 0, 0, 0}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
+            case SOUTH -> result.add(TexturedQuad.of(new float[]{1, 0, 0, 1}, new float[]{0, 0, 1, 1}, new float[]{1, 1, 1, 1}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
+            case WEST -> result.add(TexturedQuad.of(new float[]{0, 0, 0, 0}, new float[]{0, 0, 1, 1}, new float[]{1, 0, 0, 1}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
+            case EAST -> result.add(TexturedQuad.of(new float[]{1, 1, 1, 1}, new float[]{0, 0, 1, 1}, new float[]{0, 1, 1, 0}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
+            case UP -> result.add(TexturedQuad.of(new float[]{0, 1, 1, 0}, new float[]{1, 1, 1, 1}, new float[]{0, 0, 1, 1}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
+            case DOWN -> result.add(TexturedQuad.of(new float[]{0, 1, 1, 0}, new float[]{0, 0, 0, 0}, new float[]{1, 1, 0, 0}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
+        }
+    }
+
+    /** Short texture names ("minecraft:entity/chest/normal") to loaded pixels, for the shared BER geometry. */
+    private static TexturePixels shortTexture(String name) {
+        int colon = name.indexOf(':');
+        var namespace = colon < 0 ? "minecraft" : name.substring(0, colon);
+        var path = colon < 0 ? name : name.substring(colon + 1);
+        return textureFor(new ResourceLocation(namespace, "textures/" + path + ".png"));
+    }
+
+    /** Zero texel density keeps every sample at full resolution — no mip level is ever chosen. */
+    private static TexturedQuad withoutMips(TexturedQuad quad) {
+        return new TexturedQuad(quad.xs(), quad.ys(), quad.zs(), quad.us(), quad.vs(), quad.texture(),
+            quad.tintIndex(), quad.alphaOverride(), quad.colorMul(), 0, quad.nx(), quad.ny(), quad.nz());
     }
 
     private static TexturedQuad convert(BakedQuad quad, @Nullable Matrix4f transform, int colorMul) {
@@ -219,7 +330,16 @@ public final class ClientCameraAppearances {
         @Override
         @Nullable
         @SuppressWarnings({"unchecked", "rawtypes"})
-        public List<TexturedQuad> capture(LivingEntity entity) {
+        public List<TexturedQuad> capture(net.minecraft.world.entity.Entity anyEntity) {
+            if (!(anyEntity instanceof LivingEntity entity)) {
+                java.util.function.Function<net.minecraft.world.level.block.state.BlockState, List<TexturedQuad>> blocks =
+                    state -> BLOCK_QUADS.computeIfAbsent(state, ClientCameraAppearances::buildBlockQuads);
+                var vehicle = gg.lakehouse.cctv.camera.VehicleAppearances.capture(anyEntity,
+                    ClientCameraAppearances::shortTexture, blocks);
+                if (vehicle != null) return vehicle;
+                return gg.lakehouse.cctv.camera.DecorAppearances.capture(anyEntity,
+                    ClientCameraAppearances::shortTexture, blocks);
+            }
             try {
                 var out = new ArrayList<TexturedQuad>();
                 EntityModel model;
@@ -269,6 +389,7 @@ public final class ClientCameraAppearances {
                 if (entity instanceof Player player && model instanceof PlayerModel playerModel) {
                     addPlayerArmor(out, player, playerModel, pose);
                 }
+                gg.lakehouse.cctv.camera.EntityFlash.apply(out, entity);
                 if (model instanceof ArmedModel armed) {
                     var mainArm = entity.getMainArm();
                     addHeldItem(out, entity.getMainHandItem(), mainArm, armed, pose);

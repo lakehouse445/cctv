@@ -9,6 +9,7 @@ public final class Terminals {
     }
 
     public static void applyFrame(Terminal terminal, TermFrame frame) {
+        frame = FrameScaler.scale(frame, terminal.getWidth(), terminal.getHeight());
         for (int i = 0; i < frame.palette().length && i < Palette.PALETTE_SIZE; i++) {
             var rgb = Palette.decodeRGB8(frame.palette()[i]);
             terminal.getPalette().setColour(i, rgb[0], rgb[1], rgb[2]);

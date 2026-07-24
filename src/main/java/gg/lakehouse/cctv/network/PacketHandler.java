@@ -32,6 +32,14 @@ public final class PacketHandler {
             ClientboundOpenPlaybackScreenPacket::encode, ClientboundOpenPlaybackScreenPacket::decode, ClientboundOpenPlaybackScreenPacket::handle);
         CHANNEL.registerMessage(id++, ClientboundPlaybackStatusPacket.class,
             ClientboundPlaybackStatusPacket::encode, ClientboundPlaybackStatusPacket::decode, ClientboundPlaybackStatusPacket::handle);
+        CHANNEL.registerMessage(id++, ClientboundOpenCameraScreenPacket.class,
+            ClientboundOpenCameraScreenPacket::encode, ClientboundOpenCameraScreenPacket::decode, ClientboundOpenCameraScreenPacket::handle);
+        CHANNEL.registerMessage(id++, ServerboundCameraAdjustPacket.class,
+            ServerboundCameraAdjustPacket::encode, ServerboundCameraAdjustPacket::decode, ServerboundCameraAdjustPacket::handle);
+        CHANNEL.registerMessage(id++, ClientboundCameraFramePacket.class,
+            ClientboundCameraFramePacket::encode, ClientboundCameraFramePacket::decode, ClientboundCameraFramePacket::handle);
+        CHANNEL.registerMessage(id++, ClientboundCameraLinksPacket.class,
+            ClientboundCameraLinksPacket::encode, ClientboundCameraLinksPacket::decode, ClientboundCameraLinksPacket::handle);
     }
 
     public static void sendTo(ServerPlayer player, Object message) {

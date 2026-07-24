@@ -6,11 +6,12 @@ package gg.lakehouse.cctv.camera;
  * the pixels to sample. tintIndex >= 0 asks the block color handlers;
  * TINT_WATER is biome water color. alphaOverride forces texel alpha (-1 keeps
  * the texture's own). colorMul is a baked RGB multiplier (vertex color, dye,
- * item tint); 0xFFFFFF means none.
+ * item tint); 0xFFFFFF means none. texelDensity (texels per world unit) picks
+ * the mip level when sampled at a distance.
  */
 public record TexturedQuad(float[] xs, float[] ys, float[] zs, float[] us, float[] vs,
                            TexturePixels texture, int tintIndex, int alphaOverride, int colorMul,
-                           float nx, float ny, float nz) {
+                           float texelDensity, float nx, float ny, float nz) {
     public static final int TINT_NONE = -1;
     public static final int TINT_WATER = -2;
 
@@ -36,6 +37,18 @@ public record TexturedQuad(float[] xs, float[] ys, float[] zs, float[] us, float
             ny /= length;
             nz /= length;
         }
-        return new TexturedQuad(xs, ys, zs, us, vs, texture, tintIndex, alphaOverride, colorMul, nx, ny, nz);
+
+        int texW = texture.width();
+        int texH = Math.min(texture.width(), texture.height());
+        float density = Math.max(
+            edgeDensity(ax, ay, az, (us[1] - us[0]) * texW, (vs[1] - vs[0]) * texH),
+            edgeDensity(bx, by, bz, (us[2] - us[0]) * texW, (vs[2] - vs[0]) * texH));
+        return new TexturedQuad(xs, ys, zs, us, vs, texture, tintIndex, alphaOverride, colorMul, density, nx, ny, nz);
+    }
+
+    private static float edgeDensity(float wx, float wy, float wz, float du, float dv) {
+        float world = (float) Math.sqrt(wx * wx + wy * wy + wz * wz);
+        if (world < 1e-5f) return 0;
+        return (float) Math.sqrt(du * du + dv * dv) / world;
     }
 }

@@ -7,5 +7,7 @@
   "block.cctv.intercom": "Intercom",
   "block.cctv.desktop_microphone": "Desktop Microphone",
   "item.cctv.tape": "Tape",
-  "gui.cctv.label_too_long": "Too long!"
+  "gui.cctv.label_too_long": "Too long!",
+  "item.cctv.camera_link": "Camera Link",
+  "item.cctv.microphone_link": "Microphone Link"
 }

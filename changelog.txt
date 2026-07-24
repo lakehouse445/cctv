@@ -1,13 +1,42 @@
 0.9
 ===
- - 0.9.3  Fast-forward joins the transport (GUI, Lua and a pressable panel
-          button); the unused Rec button is gone from the deck face.
- - 0.9.2  The deck's front-panel buttons latch in when the matching action
-          fires from the GUI or Lua, popping out on eject or another press.
- - 0.9.1  Cassette reels spin in the playback deck: right while playing, left
-          and faster while rewinding.
- - 0.9.0  Playback deck gets its real model set: empty/filled/playing/rewinding
-          states with LED variants, and the loaded cassette visible inside.
+ - 0.9.12.0 Microphone Link joins microphones to modems the same way cameras
+            link; cameras now see other cameras' full posed models.
+ - 0.9.11.0 Camera Link: join a camera to a wired modem through solid walls,
+            no cables — six per modem, with the route shown while linking.
+ - 0.9.10.0 Security camera gets its real model: pedestal base, swiveling
+            post and tilting head, posed live on every mount.
+ - 0.9.9.1  Scroll wheel zooms the hand-aiming scope.
+ - 0.9.9.0  Cameras see everything: boats and minecarts, sign text, chests
+            that stand open while in use, beds, banners, skulls and bells.
+ - 0.9.8.0  Cameras render at full quality on dedicated servers: blocks bake
+            from Mojang's assets, entities and player skins render for real.
+ - 0.9.7.1  Monitors seen through a camera show their clean powered-off
+            screens instead of texture noise.
+ - 0.9.7.0  Microphones hear in stereo: voices pan across the sound stage by
+            position, with left and right channels in the audio event.
+ - 0.9.6.1  Exports no longer invert tones: recorded palettes store in the
+            terminal's reversed slot order and readers now respect it.
+ - 0.9.6.0  Capture card exports MP4 video instead of GIF: exact colors on
+            every frame, real playback speed, and much smaller files.
+ - 0.9.5.3  Exports share one steady palette for the whole clip and the
+            camera smooths its exposure over time: no more color flashing.
+ - 0.9.5.2  Busy dithered cells pick their two best palette shades instead of
+            collapsing to extremes; desktop microphone model revised.
+ - 0.9.5.1  Capture card GIF exports keep every frame's exact palette instead
+            of guessing colors, and no longer refuse long recordings.
+ - 0.9.5.0  Desktop microphone gets its real model and texture; voices fade
+            with distance from the microphone instead of cutting off.
+ - 0.9.4.0  Cameras report the players they can see as camera_player events,
+            so programs can archive sightings while a loop buffer rolls.
+ - 0.9.3.0  Recordings store at one standard size and playback rescales to
+            fit the monitor, so any tape plays full-screen on any screen.
+ - 0.9.2.0  Cameras film in black and white with CCTV auto-exposure and
+            distance filtering; setColorMode picks sepia or color.
+ - 0.9.1.0  Cameras mount on walls, floors and ceilings with a head that pans
+            and tilts live, aimed from Lua or a right-click spyglass scope.
+ - 0.9.0.0  Playback deck complete: the real model set with LED states, the
+            loaded cassette visible with spinning reels, latching buttons.
 
 0.8
 ===

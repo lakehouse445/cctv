@@ -10,8 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Lua-facing microphone. Raises microphone_audio events:
- * event, side, samples — samples being a table of 8-bit signed amplitudes at
- * 48 kHz, ready to feed straight into speaker.playAudio.
+ * event, side, samples, left, right — tables of 8-bit signed amplitudes at
+ * 48 kHz, ready to feed straight into speaker.playAudio. samples is the mono
+ * mix; left/right carry the stereo stage, panned by each voice's position
+ * relative to the microphone's facing.
  */
 public class MicrophonePeripheral implements IPeripheral {
     private final MicrophoneBlockEntity blockEntity;
@@ -46,13 +48,20 @@ public class MicrophonePeripheral implements IPeripheral {
         computers.remove(computer);
     }
 
-    void queueAudioEvent(byte[] samples) {
+    void queueAudioEvent(byte[] mono, byte[] left, byte[] right) {
         if (computers.isEmpty()) return;
+        var monoTable = toTable(mono);
+        var leftTable = toTable(left);
+        var rightTable = toTable(right);
+        for (var computer : computers) {
+            computer.queueEvent("microphone_audio", computer.getAttachmentName(), monoTable, leftTable, rightTable);
+        }
+    }
+
+    private static ArrayList<Integer> toTable(byte[] samples) {
         var table = new ArrayList<Integer>(samples.length);
         for (byte sample : samples) table.add((int) sample);
-        for (var computer : computers) {
-            computer.queueEvent("microphone_audio", computer.getAttachmentName(), table);
-        }
+        return table;
     }
 
     @LuaFunction(mainThread = true)
