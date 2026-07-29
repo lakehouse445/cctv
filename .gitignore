@@ -33,3 +33,6 @@ forge*changelog.txt
 /*.json
 /*.png
 *.zip
+
+# Loose working files live here
+/untracked/
