@@ -309,6 +309,13 @@ voices within 8 blocks. A voice becomes quieter when the player is farther
 from the microphone. The 1-bit audio format gives each voice a natural
 intercom sound.
 
+The microphone also hears the world: doors, footsteps, mobs, explosions,
+breaking blocks, splashing potions, rain, crackling fires and furnaces -
+game sounds within earshot mix into the stream, faded and panned by their
+position. Music, music discs, and a few purely client-side loops (nether
+portals, rolling minecarts) do not carry. On a dedicated server the sound
+files download from Mojang once, on first use.
+
 The microphone hears in stereo. A voice on the left side of the microphone's
 front is stronger in the left channel. A centered voice is equal in the two
 channels.

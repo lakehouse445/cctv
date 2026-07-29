@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "gg.lakehouse.cctv.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "cctv.refmap.json",
+  "mixins": [
+    "ServerLevelMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

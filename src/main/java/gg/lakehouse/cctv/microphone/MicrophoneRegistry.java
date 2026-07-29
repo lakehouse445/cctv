@@ -22,6 +22,17 @@ public final class MicrophoneRegistry {
         MICROPHONES.remove(microphone);
     }
 
+    /** Listening microphones in a level, for the ambient simulator. */
+    public static List<MicrophoneBlockEntity> listening(Level level) {
+        var result = new ArrayList<MicrophoneBlockEntity>();
+        for (var microphone : MICROPHONES) {
+            if (microphone.getLevel() == level && !microphone.isRemoved() && microphone.isListening()) {
+                result.add(microphone);
+            }
+        }
+        return result;
+    }
+
     public static List<MicrophoneBlockEntity> near(Level level, double x, double y, double z, double range) {
         var result = new ArrayList<MicrophoneBlockEntity>();
         for (var microphone : MICROPHONES) {

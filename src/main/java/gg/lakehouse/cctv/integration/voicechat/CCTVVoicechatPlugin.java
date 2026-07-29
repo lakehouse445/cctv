@@ -116,7 +116,7 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
             left[i] = (byte) Math.round(samples[i] * leftGain);
             right[i] = (byte) Math.round(samples[i] * rightGain);
         }
-        microphone.pushAudio(mono, left, right);
+        microphone.queueVoice(mono, left, right);
     }
 
     private void onPlayerDisconnected(PlayerDisconnectedEvent event) {

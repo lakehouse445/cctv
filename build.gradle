@@ -1,8 +1,26 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7.+'
+    }
+}
+
 plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+// Mixin: the microphones tap ServerLevel.levelEvent, which has no Forge hook.
+apply plugin: 'org.spongepowered.mixin'
+
+mixin {
+    add sourceSets.main, 'cctv.refmap.json'
+    config 'cctv.mixins.json'
 }
 
 version = mod_version
@@ -72,6 +90,10 @@ minecraft.runs.configureEach {
     lazyToken('minecraft_classpath') {
         configurations.library.copyRecursive().resolve().collect { it.absolutePath }.join(File.pathSeparator)
     }
+    // Dev runtime uses official names while the refmap speaks SRG; translate.
+    property 'mixin.env.remapRefMap', 'true'
+    property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+    args '-mixin.config=cctv.mixins.json'
 }
 
 repositories {
@@ -127,6 +149,24 @@ dependencies {
     jarJar(group: 'org.jcodec', name: 'jcodec', version: '[0.2.5,0.3)') {
         jarJar.pin(it, '0.2.5')
     }
+
+    // JOrbis: pure-Java Vorbis decode for the microphones' world-sound
+    // pickup. The dedicated server ships no audio stack at all. The
+    // soundlibs bundle carries both the jorbis and jogg classes.
+    library "com.googlecode.soundlibs:jorbis:0.0.17.4"
+    jarJar(group: 'com.googlecode.soundlibs', name: 'jorbis', version: '[0.0.17.4,0.1)') {
+        jarJar.pin(it, '0.0.17.4')
+    }
+
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+// Production loads mixin configs from the jar manifest; stamp both jars.
+tasks.named('jar', Jar).configure {
+    manifest.attributes 'MixinConfigs': 'cctv.mixins.json'
+}
+tasks.named('jarJar', Jar).configure {
+    manifest.attributes 'MixinConfigs': 'cctv.mixins.json'
 }
 
 tasks.named('processResources', ProcessResources).configure {
