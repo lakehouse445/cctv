@@ -7,6 +7,7 @@ import gg.lakehouse.cctv.network.ClientboundExportRecordingPacket;
 import gg.lakehouse.cctv.network.ClientboundOpenCameraScreenPacket;
 import gg.lakehouse.cctv.network.ClientboundOpenCaptureScreenPacket;
 import gg.lakehouse.cctv.network.ClientboundOpenPlaybackScreenPacket;
+import gg.lakehouse.cctv.network.ClientboundOpenVcrScreenPacket;
 import gg.lakehouse.cctv.network.ClientboundPlaybackStatusPacket;
 import net.minecraft.client.Minecraft;
 
@@ -49,6 +50,10 @@ public final class ClientPacketHandlers {
 
     public static void openPlaybackScreen(ClientboundOpenPlaybackScreenPacket packet) {
         Minecraft.getInstance().setScreen(new PlaybackDeckScreen(packet.status()));
+    }
+
+    public static void openVcrScreen(ClientboundOpenVcrScreenPacket packet) {
+        Minecraft.getInstance().setScreen(new VcrDisplayScreen(packet.pos(), packet.text()));
     }
 
     public static void playbackStatus(ClientboundPlaybackStatusPacket packet) {

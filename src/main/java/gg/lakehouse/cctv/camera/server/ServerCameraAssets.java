@@ -106,6 +106,9 @@ public final class ServerCameraAssets {
                 if (!(state.getBlock() instanceof LiquidBlock)) {
                     result.addAll(baker.bake(state));
                 }
+                if (gg.lakehouse.cctv.camera.MonitorAppearances.isMonitor(state)) {
+                    gg.lakehouse.cctv.camera.MonitorAppearances.apply(result, state);
+                }
                 if (!fluid.isEmpty()) addFluid(result, fluid);
                 gg.lakehouse.cctv.camera.BlockEntityAppearances.appendExtras(result, state, baker::texture);
                 if (result.isEmpty()) gg.lakehouse.cctv.camera.BlockEntityAppearances.build(result, state, baker::texture);

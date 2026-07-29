@@ -24,6 +24,8 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     private static final int FORMAT_V1 = 1;
     /** V2 adds segment metadata so recordings can span, stripe, or loop across tapes. */
     private static final int FORMAT_V2 = 2;
+    /** V3 adds the recorded monitor's physical size, so exports match its face. */
+    private static final int FORMAT_V3 = 3;
 
     /**
      * Links one file to a recording group spread over several tapes.
@@ -33,6 +35,26 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     public record SegmentInfo(java.util.UUID group, int index, int lane, int lanes, int totalFrames) {
         public String shortId() {
             return "grp_" + group.toString().substring(0, 8);
+        }
+    }
+
+    /**
+     * The recorded monitor's physical shape: size in blocks and the text
+     * scale in CC's internal half-steps (setTextScale(0.5) = 1 .. 5.0 = 10).
+     */
+    public record MonitorInfo(int blocksWide, int blocksTall, int textScaleHalf) {
+        /**
+         * Recovers the text scale by inverting CC's cell-count rounding:
+         * of the ten possible scales, exactly one reproduces the observed
+         * terminal dimensions for this block size.
+         */
+        public static MonitorInfo derive(int blocksWide, int blocksTall, int termWidth, int termHeight) {
+            for (int half = 1; half <= 10; half++) {
+                long w = Math.max(1, Math.round((blocksWide - 0.3125) / (half * 0.5 * 6.0 / 64)));
+                long h = Math.max(1, Math.round((blocksTall - 0.3125) / (half * 0.5 * 9.0 / 64)));
+                if (w == termWidth && h == termHeight) return new MonitorInfo(blocksWide, blocksTall, half);
+            }
+            return new MonitorInfo(blocksWide, blocksTall, 1);
         }
     }
 
@@ -81,7 +103,8 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
         return new TermFrame(width, height, palette, text, fg, bg);
     }
 
-    public record Recording(int fps, List<TermFrame> frames, @javax.annotation.Nullable SegmentInfo segment) {
+    public record Recording(int fps, List<TermFrame> frames, @javax.annotation.Nullable SegmentInfo segment,
+                            @javax.annotation.Nullable MonitorInfo monitor) {
     }
 
     public record Header(int fps, int frames, @javax.annotation.Nullable SegmentInfo segment) {
@@ -91,22 +114,35 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     public static Header readHeader(java.io.InputStream in) throws IOException {
         var data = new DataInputStream(new GZIPInputStream(in));
         int version = data.readUnsignedByte();
-        if (version != FORMAT_V1 && version != FORMAT_V2) throw new IOException("Unknown recording format " + version);
+        if (version < FORMAT_V1 || version > FORMAT_V3) throw new IOException("Unknown recording format " + version);
         int fps = data.readInt();
         int count = data.readInt();
-        return new Header(fps, count, version == FORMAT_V2 ? readSegment(data) : null);
+        SegmentInfo segment = null;
+        if (version == FORMAT_V2) {
+            segment = readSegment(data);
+        } else if (version == FORMAT_V3) {
+            if (data.readBoolean()) segment = readSegment(data);
+        }
+        return new Header(fps, count, segment);
     }
 
     public static byte[] writeAll(int fps, List<TermFrame> frames) throws IOException {
-        return write(fps, frames, null);
+        return write(fps, frames, null, null);
     }
 
     public static byte[] write(int fps, List<TermFrame> frames, @javax.annotation.Nullable SegmentInfo segment) throws IOException {
+        return write(fps, frames, segment, null);
+    }
+
+    public static byte[] write(int fps, List<TermFrame> frames, @javax.annotation.Nullable SegmentInfo segment,
+                               @javax.annotation.Nullable MonitorInfo monitor) throws IOException {
         var bytes = new ByteArrayOutputStream();
         try (var out = new DataOutputStream(new GZIPOutputStream(bytes))) {
-            out.writeByte(segment == null ? FORMAT_V1 : FORMAT_V2);
+            int version = monitor != null ? FORMAT_V3 : segment != null ? FORMAT_V2 : FORMAT_V1;
+            out.writeByte(version);
             out.writeInt(fps);
             out.writeInt(frames.size());
+            if (version == FORMAT_V3) out.writeBoolean(segment != null);
             if (segment != null) {
                 out.writeLong(segment.group().getMostSignificantBits());
                 out.writeLong(segment.group().getLeastSignificantBits());
@@ -114,6 +150,11 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
                 out.writeInt(segment.lane());
                 out.writeInt(segment.lanes());
                 out.writeInt(segment.totalFrames());
+            }
+            if (version == FORMAT_V3) {
+                out.writeInt(monitor.blocksWide());
+                out.writeInt(monitor.blocksTall());
+                out.writeInt(monitor.textScaleHalf());
             }
             for (var frame : frames) frame.write(out);
         }
@@ -123,13 +164,20 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     public static Recording readAll(byte[] data) throws IOException {
         try (var in = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(data)))) {
             int version = in.readUnsignedByte();
-            if (version != FORMAT_V1 && version != FORMAT_V2) throw new IOException("Unknown recording format " + version);
+            if (version < FORMAT_V1 || version > FORMAT_V3) throw new IOException("Unknown recording format " + version);
             int fps = in.readInt();
             int count = in.readInt();
-            var segment = version == FORMAT_V2 ? readSegment(in) : null;
+            SegmentInfo segment = null;
+            MonitorInfo monitor = null;
+            if (version == FORMAT_V2) {
+                segment = readSegment(in);
+            } else if (version == FORMAT_V3) {
+                if (in.readBoolean()) segment = readSegment(in);
+                monitor = new MonitorInfo(in.readInt(), in.readInt(), in.readInt());
+            }
             var frames = new ArrayList<TermFrame>(count);
             for (int i = 0; i < count; i++) frames.add(read(in));
-            return new Recording(fps, frames, segment);
+            return new Recording(fps, frames, segment, monitor);
         }
     }
 

@@ -66,10 +66,19 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
             if (pcm == null || pcm.length == 0) return;
             samples = pipeline.filter.process(pcm);
         }
+        long now = System.currentTimeMillis();
+        if (now - lastHeardLog > 10_000) {
+            lastHeardLog = now;
+            CCTV.LOGGER.debug("Microphone pipeline: hearing {} ({} samples/packet into {} mic(s))",
+                player.getName().getString(), samples.length, microphones.size());
+        }
         for (var microphone : microphones) {
             process(samples, microphone, player);
         }
     }
+
+    /** Rate limit for the hearing log; written only from the voice thread. */
+    private long lastHeardLog;
 
     /**
      * Positions one voice on the microphone's stereo stage and pushes it.
@@ -115,9 +124,9 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
         if (pipeline != null) pipeline.decoder.close();
     }
 
-    private record PlayerPipeline(OpusDecoder decoder, RadioFilter filter) {
+    private record PlayerPipeline(OpusDecoder decoder, Downsampler filter) {
         PlayerPipeline(OpusDecoder decoder) {
-            this(decoder, new RadioFilter());
+            this(decoder, new Downsampler());
         }
     }
 }

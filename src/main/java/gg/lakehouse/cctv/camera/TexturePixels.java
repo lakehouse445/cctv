@@ -21,6 +21,8 @@ public final class TexturePixels {
     private final int height;
     /** Lazy mip chain; level i is the texture halved i+1 times. Built once, then read-only. */
     private volatile int[][] mips;
+    /** 0 unknown, 1 cutout (base alpha only 0 or 255), 2 has true translucency. */
+    private volatile int cutoutState;
 
     public TexturePixels(int[] argb, int width, int height) {
         this.argb = argb;
@@ -77,6 +79,29 @@ public final class TexturePixels {
 
     private int frameHeight() {
         return height > width ? width : height;
+    }
+
+    /**
+     * True when the base level has no partial alpha — a cutout texture.
+     * Mip averaging softens cutout edges into partial alpha; those samples
+     * must resolve opaque (vanilla cutout_mipped keeps anything above ~0.1),
+     * never translucent, or atlas regions bordering transparent padding
+     * fall through at a distance.
+     */
+    public boolean cutout() {
+        int state = cutoutState;
+        if (state == 0) {
+            state = 1;
+            for (int pixel : argb) {
+                int alpha = pixel >>> 24;
+                if (alpha != 0 && alpha != 255) {
+                    state = 2;
+                    break;
+                }
+            }
+            cutoutState = state;
+        }
+        return state == 1;
     }
 
     private int[][] buildMips() {

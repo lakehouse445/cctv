@@ -3,7 +3,6 @@ package gg.lakehouse.cctv.capture;
 import dan200.computercraft.core.terminal.Terminal;
 import dan200.computercraft.shared.peripheral.monitor.MonitorBlockEntity;
 import gg.lakehouse.cctv.CCTV;
-import gg.lakehouse.cctv.media.FrameScaler;
 import gg.lakehouse.cctv.media.TermFrame;
 import gg.lakehouse.cctv.network.CaptureStatus;
 import gg.lakehouse.cctv.registry.ModRegistry;
@@ -38,6 +37,8 @@ public class CaptureCardBlockEntity extends BlockEntity {
     private boolean recording;
     private int fps = DEFAULT_FPS;
     private int tickCounter;
+    @Nullable
+    private TermFrame.MonitorInfo monitorInfo;
 
     public CaptureCardBlockEntity(BlockPos pos, BlockState state) {
         super(ModRegistry.CAPTURE_CARD_BLOCK_ENTITY.get(), pos, state);
@@ -117,8 +118,12 @@ public class CaptureCardBlockEntity extends BlockEntity {
     public String startRecording(int requestedFps) {
         if (recording) return "Already recording";
         if (tape.isEmpty()) return "No tape in the capture card";
-        if (findMonitor() == null) return "No monitor next to the capture card";
-        if (targetTerminal() == null) return "Monitor is blank - wrap it with a computer first";
+        var monitor = findMonitor();
+        if (monitor == null) return "No monitor next to the capture card";
+        var terminal = targetTerminal();
+        if (terminal == null) return "Monitor is blank - wrap it with a computer first";
+        monitorInfo = TermFrame.MonitorInfo.derive(monitor.getWidth(), monitor.getHeight(),
+            terminal.getWidth(), terminal.getHeight());
         fps = Mth.clamp(requestedFps, 1, 20);
         frames.clear();
         tickCounter = 0;
@@ -144,7 +149,7 @@ public class CaptureCardBlockEntity extends BlockEntity {
             error = "No tape - recording discarded";
         } else {
             try {
-                var data = TermFrame.writeAll(fps, frames);
+                var data = TermFrame.write(fps, frames, null, monitorInfo);
                 var name = TapeStorage.save(server, tapeId, data);
                 if (name == null) {
                     error = "Tape full - recording discarded";
@@ -173,7 +178,9 @@ public class CaptureCardBlockEntity extends BlockEntity {
             if (error != null) CCTV.LOGGER.warn("Capture card at {}: {}", worldPosition, error);
             return;
         }
-        frames.add(FrameScaler.toRecordingSize(TermFrame.capture(terminal)));
+        // Raw monitor resolution: the export renders the true face; playback
+        // rescales to whatever screen plays the tape.
+        frames.add(TermFrame.capture(terminal));
         if (frames.size() >= MAX_FRAMES) {
             var error = stopAndCommit();
             if (error != null) CCTV.LOGGER.warn("Capture card at {}: {}", worldPosition, error);

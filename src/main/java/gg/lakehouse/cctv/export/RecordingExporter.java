@@ -43,7 +43,8 @@ public final class RecordingExporter {
                 try {
                     var encoder = SequenceEncoder.createWithFps(channel, Rational.R(Math.max(1, recording.fps()), 1));
                     for (var frame : recording.frames()) {
-                        encoder.encodeNativeFrame(toPicture(padToEven(TermRenderer.render(frame))));
+                        encoder.encodeNativeFrame(toPicture(padToEven(
+                            TermRenderer.render(frame, recording.monitor()))));
                     }
                     encoder.finish();
                 } finally {

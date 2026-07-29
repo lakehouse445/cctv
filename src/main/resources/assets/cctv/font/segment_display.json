@@ -1,0 +1,10 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "cctv:38segment.ttf",
+      "size": 32.0,
+      "oversample": 1.0
+    }
+  ]
+}

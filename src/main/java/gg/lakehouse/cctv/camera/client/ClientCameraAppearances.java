@@ -169,13 +169,6 @@ public final class ClientCameraAppearances {
         var result = new ArrayList<TexturedQuad>();
         // Rendered per-position through dynamicQuads instead.
         if (gg.lakehouse.cctv.camera.BlockEntityAppearances.isDynamic(state)) return result;
-        // Monitor content is renderer-drawn and invisible to the camera; the
-        // baked model IS the powered-off look. Its textures are packed sheets
-        // though, so mips would blend bezel and screen regions into noise at
-        // a distance — sample those at full resolution instead.
-        var name = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(state.getBlock());
-        boolean sheetTexture = name != null && "computercraft".equals(name.getNamespace())
-            && name.getPath().startsWith("monitor");
         try {
             var fluid = state.getFluidState();
             if (!(state.getBlock() instanceof LiquidBlock) && state.getRenderShape() == RenderShape.MODEL) {
@@ -183,12 +176,13 @@ public final class ClientCameraAppearances {
                 var random = RandomSource.create(42);
                 for (var side : QUAD_SIDES) {
                     for (var quad : model.getQuads(state, side, random)) {
-                        var converted = convert(quad, null, 0xFFFFFF);
-                        result.add(sheetTexture ? withoutMips(converted) : converted);
+                        result.add(convert(quad, null, 0xFFFFFF));
                     }
                 }
             }
-            if (sheetTexture) coverMonitorFace(result, state);
+            if (gg.lakehouse.cctv.camera.MonitorAppearances.isMonitor(state)) {
+                gg.lakehouse.cctv.camera.MonitorAppearances.apply(result, state);
+            }
             if (!fluid.isEmpty()) addFluid(result, fluid);
             gg.lakehouse.cctv.camera.BlockEntityAppearances.appendExtras(result, state,
                 ClientCameraAppearances::shortTexture);
@@ -208,52 +202,12 @@ public final class ClientCameraAppearances {
         return result;
     }
 
-    private static final TexturePixels MONITOR_SCREEN = TexturePixels.solid(0x111111);
-
-    /**
-     * A monitor's dark screen is painted by its renderer even when blank, so
-     * the camera would show bare casing on the front — blinding white after
-     * night auto-gain. Replace the front-facing casing quads with the dark
-     * off screen; the bezel survives on the other faces.
-     */
-    private static void coverMonitorFace(List<TexturedQuad> result, BlockState state) {
-        net.minecraft.core.Direction facing = null;
-        for (var property : state.getProperties()) {
-            if (property instanceof net.minecraft.world.level.block.state.properties.DirectionProperty direction
-                && property.getName().equals("facing")) {
-                facing = state.getValue(direction);
-                break;
-            }
-        }
-        if (facing == null) return;
-        float fx = facing.getStepX();
-        float fy = facing.getStepY();
-        float fz = facing.getStepZ();
-        result.removeIf(quad -> quad.nx() * fx + quad.ny() * fy + quad.nz() * fz > 0.5f);
-        var u = new float[]{0, 1, 1, 0};
-        var v = new float[]{0, 0, 1, 1};
-        switch (facing) {
-            case NORTH -> result.add(TexturedQuad.of(new float[]{0, 1, 1, 0}, new float[]{0, 0, 1, 1}, new float[]{0, 0, 0, 0}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
-            case SOUTH -> result.add(TexturedQuad.of(new float[]{1, 0, 0, 1}, new float[]{0, 0, 1, 1}, new float[]{1, 1, 1, 1}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
-            case WEST -> result.add(TexturedQuad.of(new float[]{0, 0, 0, 0}, new float[]{0, 0, 1, 1}, new float[]{1, 0, 0, 1}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
-            case EAST -> result.add(TexturedQuad.of(new float[]{1, 1, 1, 1}, new float[]{0, 0, 1, 1}, new float[]{0, 1, 1, 0}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
-            case UP -> result.add(TexturedQuad.of(new float[]{0, 1, 1, 0}, new float[]{1, 1, 1, 1}, new float[]{0, 0, 1, 1}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
-            case DOWN -> result.add(TexturedQuad.of(new float[]{0, 1, 1, 0}, new float[]{0, 0, 0, 0}, new float[]{1, 1, 0, 0}, u, v, MONITOR_SCREEN, TexturedQuad.TINT_NONE, 255));
-        }
-    }
-
     /** Short texture names ("minecraft:entity/chest/normal") to loaded pixels, for the shared BER geometry. */
     private static TexturePixels shortTexture(String name) {
         int colon = name.indexOf(':');
         var namespace = colon < 0 ? "minecraft" : name.substring(0, colon);
         var path = colon < 0 ? name : name.substring(colon + 1);
         return textureFor(new ResourceLocation(namespace, "textures/" + path + ".png"));
-    }
-
-    /** Zero texel density keeps every sample at full resolution — no mip level is ever chosen. */
-    private static TexturedQuad withoutMips(TexturedQuad quad) {
-        return new TexturedQuad(quad.xs(), quad.ys(), quad.zs(), quad.us(), quad.vs(), quad.texture(),
-            quad.tintIndex(), quad.alphaOverride(), quad.colorMul(), 0, quad.nx(), quad.ny(), quad.nz());
     }
 
     private static TexturedQuad convert(BakedQuad quad, @Nullable Matrix4f transform, int colorMul) {

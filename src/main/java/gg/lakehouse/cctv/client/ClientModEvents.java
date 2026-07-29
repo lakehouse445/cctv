@@ -49,5 +49,6 @@ public final class ClientModEvents {
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModRegistry.PLAYBACK_DECK_BLOCK_ENTITY.get(), PlaybackDeckRenderer::new);
         event.registerBlockEntityRenderer(ModRegistry.CAMERA_BLOCK_ENTITY.get(), CameraRenderer::new);
+        event.registerBlockEntityRenderer(ModRegistry.VCR_BLOCK_ENTITY.get(), VcrRenderer::new);
     }
 }

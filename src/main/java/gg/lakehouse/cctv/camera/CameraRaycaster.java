@@ -113,9 +113,18 @@ final class CameraRaycaster {
     private final double[] hitT = new double[MAX_QUAD_HITS];
     private final double[] hitU = new double[MAX_QUAD_HITS];
     private final double[] hitV = new double[MAX_QUAD_HITS];
-    private final int[] hitQuad = new int[MAX_QUAD_HITS];
+    private final TexturedQuad[] hitQuads = new TexturedQuad[MAX_QUAD_HITS];
+    private final BlockState[] hitStates = new BlockState[MAX_QUAD_HITS];
+    private final long[] hitOwners = new long[MAX_QUAD_HITS];
     private final double[] uvA = new double[2];
     private final double[] uvB = new double[2];
+
+    private static final long[] NO_SPILL = new long[0];
+    private static final net.minecraft.core.Direction[] SIDES = net.minecraft.core.Direction.values();
+    /** Sorted keys of cells bordering geometry that overhangs its block (rotated signs, banners). */
+    private final long[] spillNeighborhood;
+    private final Map<BlockState, Boolean> spillFlags = new HashMap<>();
+    private final BlockPos.MutableBlockPos sourcePos = new BlockPos.MutableBlockPos();
 
     CameraRaycaster(ServerLevel level, BlockPos cameraPos, float yawDegrees, float pitchDegrees, double zoom,
                     int pixelWidth, int pixelHeight,
@@ -151,6 +160,57 @@ final class CameraRaycaster {
             (int) Mth.lerp(day, 0x11, 0xB8),
             (int) Mth.lerp(day, 0x18, 0xD0),
             (int) Mth.lerp(day, 0x2A, 0xF5));
+
+        spillNeighborhood = blockAppearance == null ? NO_SPILL : collectSpillNeighborhood();
+    }
+
+    /**
+     * Cells bordering blocks whose emitted geometry overhangs the block:
+     * a rotated sign board reaches ~0.2 into its neighbors, and the march
+     * only tests a block's quads in its own cell. Spilling blocks are all
+     * block entities today, so loaded chunk block-entity maps enumerate
+     * every candidate in range.
+     */
+    private long[] collectSpillNeighborhood() {
+        var cells = new ArrayList<Long>();
+        int chunkRadius = (int) (MAX_DISTANCE / 16) + 1;
+        int baseX = cameraPos.getX() >> 4;
+        int baseZ = cameraPos.getZ() >> 4;
+        for (int cx = baseX - chunkRadius; cx <= baseX + chunkRadius; cx++) {
+            for (int cz = baseZ - chunkRadius; cz <= baseZ + chunkRadius; cz++) {
+                var loaded = level.getChunkSource().getChunkNow(cx, cz);
+                if (loaded == null) continue;
+                for (var at : loaded.getBlockEntities().keySet()) {
+                    if (!spills(loaded.getBlockState(at))) continue;
+                    for (var side : SIDES) {
+                        cells.add(BlockPos.asLong(at.getX() + side.getStepX(),
+                            at.getY() + side.getStepY(), at.getZ() + side.getStepZ()));
+                    }
+                }
+            }
+        }
+        if (cells.isEmpty()) return NO_SPILL;
+        var table = new long[cells.size()];
+        for (int i = 0; i < table.length; i++) table[i] = cells.get(i);
+        java.util.Arrays.sort(table);
+        return table;
+    }
+
+    /** True when any of the state's static quads reach outside the unit cell. */
+    private boolean spills(BlockState state) {
+        var cached = spillFlags.get(state);
+        if (cached != null) return cached;
+        boolean result = false;
+        for (var quad : blockAppearance.quads(state)) {
+            for (int i = 0; i < 4 && !result; i++) {
+                result = quad.xs()[i] < -0.001f || quad.xs()[i] > 1.001f
+                    || quad.ys()[i] < -0.001f || quad.ys()[i] > 1.001f
+                    || quad.zs()[i] < -0.001f || quad.zs()[i] > 1.001f;
+            }
+            if (result) break;
+        }
+        spillFlags.put(state, result);
+        return result;
     }
 
     PixelFrame render() {
@@ -242,7 +302,10 @@ final class CameraRaycaster {
 
             var state = blockStateAt(x, y, z);
             if (chunkMissing) return applyTint(skyColor(direction), tintR, tintG, tintB);
-            if (state == null || state.isAir()) continue;
+            boolean air = state == null || state.isAir();
+            boolean nearSpill = spillNeighborhood.length > 0
+                && java.util.Arrays.binarySearch(spillNeighborhood, BlockPos.asLong(x, y, z)) >= 0;
+            if (air && !nearSpill) continue;
             pos.set(x, y, z);
 
             if (blockAppearance == null) {
@@ -261,65 +324,44 @@ final class CameraRaycaster {
             // No INVISIBLE-shape skip here: signs, banners and skulls report
             // INVISIBLE (they're renderer-drawn) yet our providers know their
             // geometry. Blocks with truly nothing yield empty quads below.
-            var quads = blockAppearance.quads(state);
-            var dynamic = dynamicQuadsAt(state, x, y, z);
-            if (!dynamic.isEmpty()) {
-                if (quads.isEmpty()) {
-                    quads = dynamic;
-                } else {
-                    var merged = new ArrayList<TexturedQuad>(quads.size() + dynamic.size());
-                    merged.addAll(quads);
-                    merged.addAll(dynamic);
-                    quads = merged;
-                }
-            }
-            if (quads.isEmpty()) continue;
-            var offset = blockAppearance.offset(state, level, pos);
-            double localX = origin.x - x - offset.x;
-            double localY = origin.y - y - offset.y;
-            double localZ = origin.z - z - offset.z;
-
             int hits = 0;
-            int quadCount = quads.size();
-            for (int qi = 0; qi < quadCount; qi++) {
-                double tq = intersectQuad(quads.get(qi), localX, localY, localZ,
-                    direction.x, direction.y, direction.z, uvA);
-                if (tq < 0 || tq > MAX_DISTANCE) continue;
-                // Every quad is tested; a full hit list drops its farthest
-                // entry, never a nearer one, so geometry-heavy blocks
-                // (merged static + dynamic lists) cannot clip front faces.
-                if (hits == MAX_QUAD_HITS) {
-                    if (tq >= hitT[MAX_QUAD_HITS - 1]) continue;
-                    hits--;
+            if (!air) hits = gatherHits(state, x, y, z, x, y, z, false, direction, hits);
+            if (nearSpill) {
+                // A neighbor's overhang reaches into this cell. Test it,
+                // keeping only hits inside this cell, so geometry the ray
+                // has not reached yet still occludes by march order.
+                boolean missing = chunkMissing;
+                for (var side : SIDES) {
+                    int nx = x + side.getStepX();
+                    int ny = y + side.getStepY();
+                    int nz = z + side.getStepZ();
+                    var neighbor = blockStateAt(nx, ny, nz);
+                    if (neighbor == null || neighbor.isAir() || !spills(neighbor)) continue;
+                    hits = gatherHits(neighbor, nx, ny, nz, x, y, z, true, direction, hits);
                 }
-                int insert = hits;
-                while (insert > 0 && hitT[insert - 1] > tq) {
-                    hitT[insert] = hitT[insert - 1];
-                    hitU[insert] = hitU[insert - 1];
-                    hitV[insert] = hitV[insert - 1];
-                    hitQuad[insert] = hitQuad[insert - 1];
-                    insert--;
-                }
-                hitT[insert] = tq;
-                hitU[insert] = uvA[0];
-                hitV[insert] = uvA[1];
-                hitQuad[insert] = qi;
-                hits++;
+                chunkMissing = missing;
             }
             if (hits == 0) continue;
 
             for (int hit = 0; hit < hits; hit++) {
-                var quad = quads.get(hitQuad[hit]);
+                var quad = hitQuads[hit];
                 int texel = quad.texture().sample(hitU[hit], hitV[hit],
                     hitT[hit] * pixelFootprint * quad.texelDensity());
                 int alpha = quad.alphaOverride() >= 0 ? quad.alphaOverride() : (texel >>> 24);
-                if (alpha < 32) continue;
+                // Cutout textures (no partial alpha at base level) resolve
+                // opaque above vanilla's cutout_mipped threshold: partial
+                // alpha here is only mip softening, and the translucent
+                // path would let atlas corners bordering transparent
+                // padding fall through at a distance.
+                boolean cutout = quad.alphaOverride() < 0 && quad.texture().cutout();
+                if (alpha < (cutout ? 26 : 32)) continue;
                 int rgb = texel & 0xFFFFFF;
                 if (quad.colorMul() != 0xFFFFFF) rgb = mulColor(rgb, quad.colorMul());
                 if (quad.tintIndex() != TexturedQuad.TINT_NONE) {
-                    rgb = mulColor(rgb, blockAppearance.tint(state, level, pos, quad.tintIndex()));
+                    rgb = mulColor(rgb, blockAppearance.tint(hitStates[hit], level,
+                        BlockPos.of(hitOwners[hit]), quad.tintIndex()));
                 }
-                if (alpha < 224 && translucentLayers < MAX_TRANSLUCENT_LAYERS) {
+                if (!cutout && alpha < 224 && translucentLayers < MAX_TRANSLUCENT_LAYERS) {
                     double a = alpha / 255.0;
                     tintR *= (1 - a) + a * ((rgb >> 16) & 0xFF) / 255.0;
                     tintG *= (1 - a) + a * ((rgb >> 8) & 0xFF) / 255.0;
@@ -334,6 +376,80 @@ final class CameraRaycaster {
                 return applyTint(color, tintR, tintG, tintB);
             }
         }
+    }
+
+    /**
+     * Intersects one block's merged static and dynamic quads along the ray,
+     * keeping the nearest hits sorted in the shared hit arrays. When
+     * {@code bounded}, only hits whose point lies inside the marching cell
+     * are kept: overhanging neighbor geometry must not paint through cells
+     * the ray has not marched yet.
+     */
+    private int gatherHits(BlockState state, int sourceX, int sourceY, int sourceZ,
+                           int cellX, int cellY, int cellZ, boolean bounded,
+                           Vec3 direction, int hits) {
+        var quads = blockAppearance.quads(state);
+        var dynamic = dynamicQuadsAt(state, sourceX, sourceY, sourceZ);
+        if (!dynamic.isEmpty()) {
+            if (quads.isEmpty()) {
+                quads = dynamic;
+            } else {
+                var merged = new ArrayList<TexturedQuad>(quads.size() + dynamic.size());
+                merged.addAll(quads);
+                merged.addAll(dynamic);
+                quads = merged;
+            }
+        }
+        if (quads.isEmpty()) return hits;
+        sourcePos.set(sourceX, sourceY, sourceZ);
+        var offset = blockAppearance.offset(state, level, sourcePos);
+        double localX = origin.x - sourceX - offset.x;
+        double localY = origin.y - sourceY - offset.y;
+        double localZ = origin.z - sourceZ - offset.z;
+        long source = BlockPos.asLong(sourceX, sourceY, sourceZ);
+
+        int quadCount = quads.size();
+        for (int qi = 0; qi < quadCount; qi++) {
+            var quad = quads.get(qi);
+            double tq = intersectQuad(quad, localX, localY, localZ,
+                direction.x, direction.y, direction.z, uvA);
+            if (tq < 0 || tq > MAX_DISTANCE) continue;
+            if (bounded) {
+                double hx = origin.x + direction.x * tq;
+                double hy = origin.y + direction.y * tq;
+                double hz = origin.z + direction.z * tq;
+                if (hx < cellX - 1e-4 || hx > cellX + 1 + 1e-4
+                    || hy < cellY - 1e-4 || hy > cellY + 1 + 1e-4
+                    || hz < cellZ - 1e-4 || hz > cellZ + 1 + 1e-4) {
+                    continue;
+                }
+            }
+            // Every quad is tested; a full hit list drops its farthest
+            // entry, never a nearer one, so geometry-heavy cells cannot
+            // clip front faces.
+            if (hits == MAX_QUAD_HITS) {
+                if (tq >= hitT[MAX_QUAD_HITS - 1]) continue;
+                hits--;
+            }
+            int insert = hits;
+            while (insert > 0 && hitT[insert - 1] > tq) {
+                hitT[insert] = hitT[insert - 1];
+                hitU[insert] = hitU[insert - 1];
+                hitV[insert] = hitV[insert - 1];
+                hitQuads[insert] = hitQuads[insert - 1];
+                hitStates[insert] = hitStates[insert - 1];
+                hitOwners[insert] = hitOwners[insert - 1];
+                insert--;
+            }
+            hitT[insert] = tq;
+            hitU[insert] = uvA[0];
+            hitV[insert] = uvA[1];
+            hitQuads[insert] = quad;
+            hitStates[insert] = state;
+            hitOwners[insert] = source;
+            hits++;
+        }
+        return hits;
     }
 
     private List<TexturedQuad> dynamicQuadsAt(BlockState state, int x, int y, int z) {

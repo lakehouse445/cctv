@@ -1,5 +1,11 @@
 0.9
 ===
+ - 0.9.14.0 VCR gets a red 12-cell segment display, settable from Lua; mics
+            deliver voices as 16 kHz DFPWM, tiny on listening computers.
+ - 0.9.13.0 Capture card records at the monitor's true resolution and exports
+            MP4s shaped like the monitor's face, margins and scale included.
+ - 0.9.12.1 Cameras shade faces like vanilla, draw the real font on signs
+            and nametags, and no longer clip rotated signs at block edges.
  - 0.9.12.0 Microphone Link joins microphones to modems the same way cameras
             link; cameras now see other cameras' full posed models.
  - 0.9.11.0 Camera Link: join a camera to a wired modem through solid walls,

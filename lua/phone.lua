@@ -24,7 +24,11 @@ local RING_TIMEOUT = 20
 local HEARTBEAT = 5
 local PRESENCE_EXPIRY = 15
 
-local modem = peripheral.find("modem") or error("No modem attached", 0)
+-- Prefer the ender/wireless modem: a station usually also has a wired
+-- modem for its own peripherals, and rednet must not end up on that one.
+local modem = peripheral.find("modem", function(_, m) return m.isWireless() end)
+  or peripheral.find("modem")
+  or error("No modem attached", 0)
 rednet.open(peripheral.getName(modem))
 
 -- ================= Exchange =================

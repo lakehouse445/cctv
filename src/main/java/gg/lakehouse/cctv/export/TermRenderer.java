@@ -52,6 +52,51 @@ public final class TermRenderer {
     }
 
     /**
+     * Renders one frame as the recorded monitor's face: sized from its
+     * blocks at 256 pixels per block, the terminal seated with CC's margin
+     * and cell sizes for its text scale, edge backgrounds extended into the
+     * margin exactly as monitors draw in-world. Falls back to the plain
+     * terminal render when the recording predates monitor metadata.
+     */
+    public static BufferedImage render(TermFrame frame, @javax.annotation.Nullable TermFrame.MonitorInfo monitor)
+        throws IOException {
+        if (monitor == null) return render(frame);
+        var mask = fontMask();
+        // 256 px per block; CC: glass = blocks - 2*(2/16), margin 0.5/16,
+        // one font pixel = textScaleHalf/128 blocks -> 2*half px, exactly.
+        int fontPx = 2 * Math.max(1, monitor.textScaleHalf());
+        int cellW = GLYPH_W * fontPx;
+        int cellH = GLYPH_H * fontPx;
+        int margin = 8;
+        int outW = monitor.blocksWide() * 256 - 64;
+        int outH = monitor.blocksTall() * 256 - 64;
+        var image = new BufferedImage(outW, outH, BufferedImage.TYPE_INT_RGB);
+        for (int py = 0; py < outH; py++) {
+            int cy = Math.floorDiv(py - margin, cellH);
+            int clampedY = Math.min(frame.height() - 1, Math.max(0, cy));
+            String text = frame.text()[clampedY];
+            String fgLine = frame.fg()[clampedY];
+            String bgLine = frame.bg()[clampedY];
+            for (int px = 0; px < outW; px++) {
+                int cx = Math.floorDiv(px - margin, cellW);
+                int clampedX = Math.min(frame.width() - 1, Math.max(0, cx));
+                int bg = frame.palette()[15 - colourIndex(bgLine, clampedX)] & 0xFFFFFF;
+                int color = bg;
+                if (cx == clampedX && cy == clampedY && px >= margin && py >= margin) {
+                    int glyph = clampedX < text.length() ? text.charAt(clampedX) & 0xFF : ' ';
+                    int gx = (px - margin - cx * cellW) / fontPx;
+                    int gy = (py - margin - cy * cellH) / fontPx;
+                    if (mask[(glyph * GLYPH_H + gy) * GLYPH_W + gx]) {
+                        color = frame.palette()[15 - colourIndex(fgLine, clampedX)] & 0xFFFFFF;
+                    }
+                }
+                image.setRGB(px, py, color);
+            }
+        }
+        return image;
+    }
+
+    /**
      * Renders one frame at full color fidelity — each cell uses its frame's
      * exact palette entries. Captured palettes are stored in CC's internal
      * array order, which runs BLACK(0)..WHITE(15) — the reverse of blit's

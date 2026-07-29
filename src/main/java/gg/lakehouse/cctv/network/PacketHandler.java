@@ -40,6 +40,10 @@ public final class PacketHandler {
             ClientboundCameraFramePacket::encode, ClientboundCameraFramePacket::decode, ClientboundCameraFramePacket::handle);
         CHANNEL.registerMessage(id++, ClientboundCameraLinksPacket.class,
             ClientboundCameraLinksPacket::encode, ClientboundCameraLinksPacket::decode, ClientboundCameraLinksPacket::handle);
+        CHANNEL.registerMessage(id++, ClientboundOpenVcrScreenPacket.class,
+            ClientboundOpenVcrScreenPacket::encode, ClientboundOpenVcrScreenPacket::decode, ClientboundOpenVcrScreenPacket::handle);
+        CHANNEL.registerMessage(id++, ServerboundVcrDisplayPacket.class,
+            ServerboundVcrDisplayPacket::encode, ServerboundVcrDisplayPacket::decode, ServerboundVcrDisplayPacket::handle);
     }
 
     public static void sendTo(ServerPlayer player, Object message) {

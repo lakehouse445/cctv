@@ -40,12 +40,30 @@ public final class VehicleAppearances {
         var part = GeometryPack.layers().get(layer);
         if (part == null) return null;
         var out = new ArrayList<TexturedQuad>();
+        // Vanilla's boat transform: yaw, the y-down flip, then a quarter
+        // turn — the boat model is authored sideways along x.
         var matrix = new Matrix4f()
             .rotateY((float) Math.toRadians(180 - boat.getYRot()))
-            .scale(-1, -1, 1);
-        GeometryPack.emit(out, part, matrix, textures.apply(texture), 0xFFFFFF);
+            .scale(-1, -1, 1)
+            .rotateY((float) Math.toRadians(90));
+        var paddles = java.util.Map.of(
+            "left_paddle", paddlePose(boat, 0),
+            "right_paddle", paddlePose(boat, 1));
+        GeometryPack.emit(out, part, "root", matrix, textures.apply(texture), 0xFFFFFF,
+            java.util.Map.of(), paddles);
         seat(out);
         return out;
+    }
+
+    /** Vanilla's paddle pose: resting angle over the gunwale, swinging with rowing time. */
+    private static float[] paddlePose(Boat boat, int side) {
+        float time = boat.getRowingTime(side, 1);
+        float x = net.minecraft.util.Mth.clampedLerp(-(float) Math.PI / 3, -(float) Math.PI / 12,
+            (net.minecraft.util.Mth.sin(-time) + 1) / 2);
+        float y = net.minecraft.util.Mth.clampedLerp(-(float) Math.PI / 4, (float) Math.PI / 4,
+            (net.minecraft.util.Mth.sin(-time + 1) + 1) / 2);
+        if (side == 1) y = (float) Math.PI - y;
+        return new float[]{x, y};
     }
 
     private static List<TexturedQuad> captureMinecart(AbstractMinecart minecart,

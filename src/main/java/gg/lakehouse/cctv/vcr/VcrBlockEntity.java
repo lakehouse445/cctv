@@ -12,9 +12,13 @@ import gg.lakehouse.cctv.tape.TapeStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -22,6 +26,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -40,6 +45,13 @@ public class VcrBlockEntity extends BlockEntity {
     public static final int SEGMENT_FRAMES = 500;
     /** Below this much free space the deck's red FULL light comes on. */
     private static final long FULL_THRESHOLD_BYTES = 16 * 1024;
+
+    // Front-panel display states, synced to the client for the 7-segment readout.
+    public static final int DISPLAY_IDLE = 0;
+    public static final int DISPLAY_RECORDING = 1;
+    public static final int DISPLAY_PLAYING = 2;
+    /** The readout is a fixed 12-cell character display. */
+    public static final int DISPLAY_CELLS = 12;
 
     private final VcrPeripheral peripheral = new VcrPeripheral(this);
     private ItemStack tape = ItemStack.EMPTY;
@@ -64,6 +76,13 @@ public class VcrBlockEntity extends BlockEntity {
     private int playFps = DEFAULT_FPS;
     private double playPosition;
     private int lastAppliedFrame = -1;
+
+    // Display state; runtime only, mirrored to watching clients.
+    private int displayMode = DISPLAY_IDLE;
+    private long displayStart;
+    /** Custom front-panel text set from Lua; overrides the automatic readout. */
+    @Nullable
+    private String displayText;
 
     public VcrBlockEntity(BlockPos pos, BlockState state) {
         super(ModRegistry.VCR_BLOCK_ENTITY.get(), pos, state);
@@ -162,6 +181,42 @@ public class VcrBlockEntity extends BlockEntity {
         }
     }
 
+    // === Display ===
+
+    public int displayMode() {
+        return displayMode;
+    }
+
+    /** Game time when the current display state began; the readout counts up from it. */
+    public long displayStart() {
+        return displayStart;
+    }
+
+    private void setDisplay(int mode) {
+        if (displayMode == mode) return;
+        displayMode = mode;
+        displayStart = level == null ? 0 : level.getGameTime();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        }
+    }
+
+    @Nullable
+    public String displayText() {
+        return displayText;
+    }
+
+    /** Sets this deck's custom readout, or null to return to the automatic one. */
+    public void setDisplayText(@Nullable String text) {
+        if (text != null && text.length() > DISPLAY_CELLS) text = text.substring(0, DISPLAY_CELLS);
+        if (Objects.equals(displayText, text)) return;
+        displayText = text;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        }
+    }
+
     // === Mode ===
 
     public RaidMode mode() {
@@ -204,6 +259,7 @@ public class VcrBlockEntity extends BlockEntity {
         head.loopGroup = loopMode ? UUID.randomUUID() : null;
         head.loopSegmentIndex = 0;
         head.recording = true;
+        head.setDisplay(DISPLAY_RECORDING);
         return null;
     }
 
@@ -244,6 +300,7 @@ public class VcrBlockEntity extends BlockEntity {
         head.playPosition = 0;
         head.lastAppliedFrame = -1;
         head.playing = true;
+        head.setDisplay(DISPLAY_PLAYING);
         return null;
     }
 
@@ -255,6 +312,7 @@ public class VcrBlockEntity extends BlockEntity {
         head.playFrames = null;
         head.playName = null;
         head.playPosition = 0;
+        head.setDisplay(DISPLAY_IDLE);
         return null;
     }
 
@@ -264,6 +322,7 @@ public class VcrBlockEntity extends BlockEntity {
         if (!isPrimary()) return;
         if (recording) tickRecording();
         else if (playing) tickPlayback();
+        else setDisplay(DISPLAY_IDLE);
     }
 
     private void tickRecording() {
@@ -320,6 +379,7 @@ public class VcrBlockEntity extends BlockEntity {
     @Nullable
     private String stopAndCommit() {
         recording = false;
+        setDisplay(DISPLAY_IDLE);
         String error;
         if (loop) {
             error = frames.isEmpty() ? null : commitLoopSegment();
@@ -639,6 +699,7 @@ public class VcrBlockEntity extends BlockEntity {
         super.saveAdditional(tag);
         if (!tape.isEmpty()) tag.put("Tape", tape.save(new CompoundTag()));
         tag.putString("RaidMode", mode.name());
+        if (displayText != null) tag.putString("DisplayText", displayText);
     }
 
     @Override
@@ -647,5 +708,23 @@ public class VcrBlockEntity extends BlockEntity {
         tape = tag.contains("Tape") ? ItemStack.of(tag.getCompound("Tape")) : ItemStack.EMPTY;
         var loaded = RaidMode.byName(tag.getString("RaidMode"));
         mode = loaded == null ? RaidMode.SPAN : loaded;
+        // Only present in update tags; the mode and timer are never persisted.
+        displayMode = tag.getInt("Display");
+        displayStart = tag.getLong("DisplayStart");
+        displayText = tag.contains("DisplayText") ? tag.getString("DisplayText") : null;
+    }
+
+    @Override
+    public CompoundTag getUpdateTag() {
+        var tag = new CompoundTag();
+        tag.putInt("Display", displayMode);
+        tag.putLong("DisplayStart", displayStart);
+        if (displayText != null) tag.putString("DisplayText", displayText);
+        return tag;
+    }
+
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
     }
 }

@@ -9,6 +9,7 @@ version="${mod_version}"
 displayName="${mod_name}"
 #logoFile="cctv.png"
 authors="${mod_authors}"
+credits="Front-panel font: FontStruction \"38-Segment Display\" by PhuWorks (CC BY 3.0, fontstruct.com/fontstructions/show/2772158)"
 description='''${mod_description}'''
 
 [[dependencies.${mod_id}]]

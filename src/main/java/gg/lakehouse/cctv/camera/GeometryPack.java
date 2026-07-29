@@ -112,13 +112,25 @@ public final class GeometryPack {
     /** Emit with extra X rotations by part name — chest lids, lecterns, anything hinged. */
     public static void emit(List<TexturedQuad> out, Part part, String name, Matrix4f parent,
                             TexturePixels texture, int colorMul, Map<String, Float> extraXRot) {
+        emit(out, part, name, parent, texture, colorMul, extraXRot, Map.of());
+    }
+
+    /**
+     * Emit with hinged X additions and absolute X/Y pose overrides by part
+     * name — vanilla poses boat paddles by assignment, not addition.
+     */
+    public static void emit(List<TexturedQuad> out, Part part, String name, Matrix4f parent,
+                            TexturePixels texture, int colorMul, Map<String, Float> extraXRot,
+                            Map<String, float[]> poseOverride) {
         // Boats carry an invisible depth-mask part that keeps water out of
         // the hull; rendered as geometry it would lid the boat shut.
         if (name.equals("water_patch")) return;
         var matrix = new Matrix4f(parent).translate(part.x() / 16, part.y() / 16, part.z() / 16);
-        float xr = part.xr() + extraXRot.getOrDefault(name, 0f);
+        var pose = poseOverride.get(name);
+        float xr = pose != null ? pose[0] : part.xr() + extraXRot.getOrDefault(name, 0f);
+        float yr = pose != null ? pose[1] : part.yr();
         if (part.zr() != 0) matrix.rotateZ(part.zr());
-        if (part.yr() != 0) matrix.rotateY(part.yr());
+        if (yr != 0) matrix.rotateY(yr);
         if (xr != 0) matrix.rotateX(xr);
 
         var position = new Vector3f();
@@ -140,7 +152,7 @@ public final class GeometryPack {
             out.add(TexturedQuad.ofColored(xs, ys, zs, us, vs, texture, TexturedQuad.TINT_NONE, -1, colorMul));
         }
         for (var child : part.children().entrySet()) {
-            emit(out, child.getValue(), child.getKey(), matrix, texture, colorMul, extraXRot);
+            emit(out, child.getValue(), child.getKey(), matrix, texture, colorMul, extraXRot, poseOverride);
         }
     }
 }

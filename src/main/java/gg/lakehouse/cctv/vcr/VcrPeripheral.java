@@ -82,6 +82,21 @@ public class VcrPeripheral implements IPeripheral {
         return result;
     }
 
+    /** Sets this deck's front-panel readout; call with no text to restore the automatic one. */
+    @LuaFunction(mainThread = true)
+    public final void setDisplay(Optional<String> text) throws LuaException {
+        if (text.isPresent() && text.get().length() > VcrBlockEntity.DISPLAY_CELLS) {
+            throw new LuaException("Display text is limited to " + VcrBlockEntity.DISPLAY_CELLS + " characters");
+        }
+        blockEntity.setDisplayText(text.orElse(null));
+    }
+
+    @Nullable
+    @LuaFunction(mainThread = true)
+    public final String getDisplay() {
+        return blockEntity.displayText();
+    }
+
     @LuaFunction(mainThread = true)
     public final void eject() throws LuaException {
         if (!blockEntity.hasTape()) throw new LuaException("No tape in this deck");

@@ -9,18 +9,21 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.ArrayDeque;
 
 /**
- * An intercom microphone. The voice chat plugin pushes filtered 8-bit 48 kHz
- * samples in from the voice network thread; the server tick drains completed
- * chunks and raises microphone_audio events on attached computers.
+ * An intercom microphone. The voice chat plugin pushes downsampled 8-bit
+ * 16 kHz samples in from the voice network thread; the server tick drains
+ * completed chunks, packs them as DFPWM, and raises microphone_audio events
+ * on attached computers.
  */
 public class MicrophoneBlockEntity extends BlockEntity {
     public static final int PICKUP_RANGE = 8;
-    public static final int SAMPLE_RATE = 48000;
+    public static final int SAMPLE_RATE = 16000;
     /** 0.1 s of audio per Lua event. */
-    private static final int CHUNK_SAMPLES = 4800;
+    private static final int CHUNK_SAMPLES = 1600;
     private static final int MAX_QUEUED_CHUNKS = 8;
 
     private final MicrophonePeripheral peripheral = new MicrophonePeripheral(this);
+    /** Mono, left, right DFPWM streams for the Lua events. */
+    private final DfpwmEncoder[] encoders = {new DfpwmEncoder(), new DfpwmEncoder(), new DfpwmEncoder()};
     private final Object audioLock = new Object();
     /** Each chunk is three parallel channels: mono mix, left, right. */
     private final ArrayDeque<byte[][]> chunks = new ArrayDeque<>();
@@ -74,7 +77,12 @@ public class MicrophoneBlockEntity extends BlockEntity {
                 chunk = chunks.pollFirst();
             }
             if (chunk == null) return;
-            peripheral.queueAudioEvent(chunk[0], chunk[1], chunk[2]);
+            // Server thread only: the encoders' predictor state must stay
+            // continuous across chunks, one encoder per channel.
+            peripheral.queueAudioEvent(
+                encoders[0].encode(chunk[0]),
+                encoders[1].encode(chunk[1]),
+                encoders[2].encode(chunk[2]));
         }
     }
 

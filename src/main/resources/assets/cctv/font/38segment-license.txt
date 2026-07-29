@@ -1,0 +1,10 @@
+The FontStruction “38-Segment Display”
+(https://fontstruct.com/fontstructions/show/2772158) by PhuWorks  is licensed
+under a Creative Commons Attribution license
+(http://creativecommons.org/licenses/by/3.0/).
+[ancestry]
+
+The copy shipped with CC:TV (38segment.ttf) is modified from the original:
+each glyph's ink is centered within its advance cell, the outlines are
+fitted to a 32-pixel raster grid, and the font was converted from CFF to
+TrueType.

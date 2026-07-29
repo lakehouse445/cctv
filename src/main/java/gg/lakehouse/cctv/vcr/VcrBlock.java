@@ -1,9 +1,12 @@
 package gg.lakehouse.cctv.vcr;
 
+import gg.lakehouse.cctv.network.ClientboundOpenVcrScreenPacket;
+import gg.lakehouse.cctv.network.PacketHandler;
 import gg.lakehouse.cctv.registry.ModRegistry;
 import gg.lakehouse.cctv.tape.TapeItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -55,6 +58,9 @@ public class VcrBlock extends HorizontalDirectionalBlock implements EntityBlock 
                 vcr.insertTape(held);
             } else if (player.isShiftKeyDown() && vcr.hasTape()) {
                 player.getInventory().placeItemBackInInventory(vcr.ejectTape());
+            } else if (held.isEmpty() && !player.isShiftKeyDown() && player instanceof ServerPlayer serverPlayer) {
+                var text = vcr.displayText();
+                PacketHandler.sendTo(serverPlayer, new ClientboundOpenVcrScreenPacket(pos, text == null ? "" : text));
             }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);

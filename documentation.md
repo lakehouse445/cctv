@@ -153,10 +153,11 @@ Event fields:
 
 The capture card records the screen of a monitor. Put the capture card next to
 a monitor. Put a tape in the capture card. The card records the monitor to the
-tape.
+tape at the monitor's own resolution.
 
 The card can also make an MP4 video file on your computer. Open the card
-screen and select export. You cannot export from Lua.
+screen and select export. The video has the size and shape of the recorded
+monitor's face. You cannot export from Lua.
 
 ### 5.1 Capture card functions
 
@@ -268,6 +269,8 @@ the full array.
 | `getFreeSpace()` | number | The free space of the tape in bytes. |
 | `list()` | table | The recordings on this tape. |
 | `eject()` | — | Push the tape out of this deck. |
+| `setDisplay([text])` | — | Put text on the front panel, 12 characters max. Call with no text to restore the automatic readout. |
+| `getDisplay()` | string | The custom panel text, or nil for the automatic readout. |
 
 **The array:**
 
@@ -303,7 +306,8 @@ The microphone sends real player voices to Lua. The mod has 2 microphones:
 
 You need the Simple Voice Chat mod for the microphones. The microphone picks up
 voices within 8 blocks. A voice becomes quieter when the player is farther
-from the microphone. The mod adds a radio filter to each voice.
+from the microphone. The 1-bit audio format gives each voice a natural
+intercom sound.
 
 The microphone hears in stereo. A voice on the left side of the microphone's
 front is stronger in the left channel. A centered voice is equal in the two
@@ -320,7 +324,7 @@ Peripheral type: `microphone`.
 |---|---|---|
 | `setListening(on)` | — | Turn the microphone on or off. |
 | `isListening()` | boolean | True when the microphone is on. |
-| `getSampleRate()` | number | The audio sample rate. This is 48000. |
+| `getSampleRate()` | number | The audio sample rate. This is 16000. |
 | `getPickupRange()` | number | The pickup distance in blocks. This is 8. |
 
 ### 9.2 The audio event
@@ -331,12 +335,33 @@ Event fields:
 
 1. `microphone_audio` — the event name.
 2. `side` — the side of the microphone.
-3. `samples` — a list of 8-bit audio values. This is the mono mix.
-4. `left` — the left channel of the stereo stage.
-5. `right` — the right channel of the stereo stage.
+3. `samples` — a DFPWM string. This is the mono mix.
+4. `left` — the left channel of the stereo stage, as a DFPWM string.
+5. `right` — the right channel of the stereo stage, as a DFPWM string.
 
-Give a list to `speaker.playAudio` to play the voice. For stereo, play `left`
-and `right` on two speakers.
+The audio is DFPWM at 16000 samples per second: one bit per sample, so each
+event carries small strings, not big tables. Unpack a channel with the
+`cc.audio.dfpwm` decoder. Keep one decoder per channel. The speaker plays
+48000 samples per second, so repeat each value 3 times:
+
+```lua
+local dfpwm = require("cc.audio.dfpwm")
+local decode = dfpwm.make_decoder()
+local speaker = peripheral.find("speaker")
+while true do
+  local _, _, samples = os.pullEvent("microphone_audio")
+  local pcm = decode(samples)
+  local out = {}
+  for i = 1, #pcm do
+    local v = pcm[i]
+    for j = 1, 3 do out[#out + 1] = v end
+  end
+  speaker.playAudio(out)
+end
+```
+
+For stereo, decode `left` and `right` with their own decoders and play them
+on two speakers.
 
 ---
 
@@ -375,3 +400,12 @@ end
 To record a camera, show the camera on a monitor with the program in 10.1.
 Put the monitor against the VCR array. Then call `vcr.record(fps)`. The
 array records the monitor. Call `vcr.record(fps, true)` for a loop recorder.
+
+---
+
+## Credits
+
+The VCR front panel uses the FontStruction
+["38-Segment Display"](https://fontstruct.com/fontstructions/show/2772158)
+by PhuWorks, licensed under a
+[Creative Commons Attribution license](http://creativecommons.org/licenses/by/3.0/).
