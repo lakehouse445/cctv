@@ -153,6 +153,9 @@ elseif mode == "record" then
   local chunks = {}
   local frames = 0
   local voiced = 0
+  -- Deficits under a quarter second are event-delivery jitter, not silence;
+  -- padding those punched holes into continuous speech.
+  local GAP = rate / 4
   local start = os.clock()
   local stopAt = start + seconds
   local timer = os.startTimer(seconds)
@@ -160,7 +163,7 @@ elseif mode == "record" then
     local event, a, mono = os.pullEvent()
     if event == "microphone_audio" then
       local expected = math.floor((os.clock() - start) * rate) - #mono * 8
-      if expected > frames then
+      if expected - frames > GAP then
         chunks[#chunks + 1] = string.rep("\85", math.floor((expected - frames) / 8))
         frames = expected
       end

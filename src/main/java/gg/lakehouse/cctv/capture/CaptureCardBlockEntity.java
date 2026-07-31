@@ -23,13 +23,19 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Records the terminal of an adjacent monitor onto the inserted tape.
- * Frames buffer in memory while recording and are committed to the tape
- * (world/cctv/tapes/&lt;id&gt;) when recording stops.
+ * Records the terminal of an adjacent monitor - or an adjacent computer's
+ * own screen - onto the inserted tape. Frames buffer in memory while
+ * recording and are committed to the tape (world/cctv/tapes/&lt;id&gt;)
+ * when recording stops.
  */
 public class CaptureCardBlockEntity extends BlockEntity {
     public static final int MAX_FRAMES = 3000;
     public static final int DEFAULT_FPS = 5;
+
+    /** What the card points at. The choice only matters when both are adjacent. */
+    public enum Source {
+        MONITOR, COMPUTER
+    }
 
     private final CaptureCardPeripheral peripheral = new CaptureCardPeripheral(this);
     private final List<TermFrame> frames = new ArrayList<>();
@@ -37,6 +43,7 @@ public class CaptureCardBlockEntity extends BlockEntity {
     private boolean recording;
     private int fps = DEFAULT_FPS;
     private int tickCounter;
+    private Source source = Source.MONITOR;
     @Nullable
     private TermFrame.MonitorInfo monitorInfo;
 
@@ -101,7 +108,49 @@ public class CaptureCardBlockEntity extends BlockEntity {
     }
 
     @Nullable
+    public dan200.computercraft.shared.computer.blocks.AbstractComputerBlockEntity findComputer() {
+        if (level == null) return null;
+        for (var direction : Direction.values()) {
+            if (level.getBlockEntity(worldPosition.relative(direction))
+                instanceof dan200.computercraft.shared.computer.blocks.AbstractComputerBlockEntity computer) {
+                return computer;
+            }
+        }
+        return null;
+    }
+
+    public Source source() {
+        return source;
+    }
+
+    /** @return null on success, otherwise a human-readable error. */
+    @Nullable
+    public String setSource(Source newSource) {
+        if (recording) return "Stop recording first";
+        if (source != newSource) {
+            source = newSource;
+            setChanged();
+        }
+        return null;
+    }
+
+    /** The chosen source when it is present, else whichever screen exists. */
+    private Source effectiveSource() {
+        boolean monitor = findMonitor() != null;
+        boolean computer = findComputer() != null;
+        if (source == Source.MONITOR) return monitor || !computer ? Source.MONITOR : Source.COMPUTER;
+        return computer || !monitor ? Source.COMPUTER : Source.MONITOR;
+    }
+
+    @Nullable
     private Terminal targetTerminal() {
+        if (effectiveSource() == Source.COMPUTER) {
+            var computer = findComputer();
+            if (computer == null) return null;
+            // The server computer's own terminal is private; its sync state
+            // rehydrates into a Terminal snapshot we can capture.
+            return computer.createServerComputer().getTerminalState().create();
+        }
         var monitor = findMonitor();
         if (monitor == null) return null;
         var serverMonitor = monitor.getCachedServerMonitor();
@@ -119,11 +168,15 @@ public class CaptureCardBlockEntity extends BlockEntity {
         if (recording) return "Already recording";
         if (tape.isEmpty()) return "No tape in the capture card";
         var monitor = findMonitor();
-        if (monitor == null) return "No monitor next to the capture card";
+        if (monitor == null && findComputer() == null) return "No monitor or computer next to the capture card";
         var terminal = targetTerminal();
         if (terminal == null) return "Monitor is blank - wrap it with a computer first";
-        monitorInfo = TermFrame.MonitorInfo.derive(monitor.getWidth(), monitor.getHeight(),
-            terminal.getWidth(), terminal.getHeight());
+        // Computers have no physical face; their recordings export as the
+        // plain terminal render, like pre-monitor-metadata tapes.
+        monitorInfo = effectiveSource() == Source.MONITOR && monitor != null
+            ? TermFrame.MonitorInfo.derive(monitor.getWidth(), monitor.getHeight(),
+                terminal.getWidth(), terminal.getHeight())
+            : null;
         fps = Mth.clamp(requestedFps, 1, 20);
         frames.clear();
         tickCounter = 0;
@@ -214,6 +267,7 @@ public class CaptureCardBlockEntity extends BlockEntity {
             recordings = TapeStorage.list(server, tapeId).size();
         }
         return new CaptureStatus(worldPosition, recording, frames.size(), fps, findMonitor() != null,
+            findComputer() != null, source == Source.COMPUTER,
             !tape.isEmpty(), tape.isEmpty() ? "" : tape.getHoverName().getString(),
             used, TapeItem.CAPACITY_BYTES, recordings);
     }
@@ -224,11 +278,13 @@ public class CaptureCardBlockEntity extends BlockEntity {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         if (!tape.isEmpty()) tag.put("Tape", tape.save(new CompoundTag()));
+        if (source == Source.COMPUTER) tag.putBoolean("SourceComputer", true);
     }
 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
         tape = tag.contains("Tape") ? ItemStack.of(tag.getCompound("Tape")) : ItemStack.EMPTY;
+        source = tag.getBoolean("SourceComputer") ? Source.COMPUTER : Source.MONITOR;
     }
 }

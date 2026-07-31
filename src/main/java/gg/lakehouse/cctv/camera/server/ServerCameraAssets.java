@@ -202,6 +202,10 @@ public final class ServerCameraAssets {
                 && level.getBlockEntity(pos) instanceof gg.lakehouse.cctv.camera.CameraBlockEntity camera) {
                 return gg.lakehouse.cctv.camera.CameraRigAppearances.build(state, camera, this::modelQuads);
             }
+            if (gg.lakehouse.cctv.camera.CctvAppearances.handles(state)) {
+                return gg.lakehouse.cctv.camera.CctvAppearances.build(state, level, pos,
+                    baker::texture, this::modelQuads);
+            }
             if (!gg.lakehouse.cctv.camera.BlockEntityAppearances.isDynamic(state)
                 && !(state.getBlock() instanceof net.minecraft.world.level.block.SignBlock)) {
                 return List.of();

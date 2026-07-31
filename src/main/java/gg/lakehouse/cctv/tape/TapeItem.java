@@ -16,7 +16,7 @@ import java.util.UUID;
  * the actual recordings live in the world folder under cctv/tapes/&lt;id&gt;.
  * Rename on an anvil to label it.
  */
-public class TapeItem extends Item {
+public class TapeItem extends Item implements DyeableCassette {
     public static final long CAPACITY_BYTES = 10L * 1024 * 1024;
     /** Hard cap for the written label; anvil renames are truncated to this. */
     public static final int MAX_LABEL_CHARS = 12;

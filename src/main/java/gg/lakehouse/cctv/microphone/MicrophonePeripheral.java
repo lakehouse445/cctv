@@ -74,4 +74,23 @@ public class MicrophonePeripheral implements IPeripheral {
     public final int getPickupRange() {
         return MicrophoneBlockEntity.PICKUP_RANGE;
     }
+
+    /**
+     * Sets the intercom's screen text (VCR-style); call with no text to
+     * restore the automatic LIVE/MUTED readout. Desktop mics have no screen.
+     */
+    @LuaFunction(mainThread = true)
+    public final void setDisplay(java.util.Optional<String> text) throws dan200.computercraft.api.lua.LuaException {
+        if (text.isPresent() && text.get().length() > MicrophoneBlockEntity.DISPLAY_CELLS) {
+            throw new dan200.computercraft.api.lua.LuaException(
+                "Display text is limited to " + MicrophoneBlockEntity.DISPLAY_CELLS + " characters");
+        }
+        blockEntity.setDisplayText(text.orElse(null));
+    }
+
+    @javax.annotation.Nullable
+    @LuaFunction(mainThread = true)
+    public final String getDisplay() {
+        return blockEntity.displayText();
+    }
 }

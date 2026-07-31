@@ -1,5 +1,14 @@
 0.9
 ===
+ - 0.9.15.0 VCR, camera, intercom and desktop mic remodeled and retextured;
+            VCR display reborn on an in-house dot-matrix font. New compact
+            cassette item with two-sided anvil labels; VHS reels behind real
+            glass; cassette label strips take dye and cauldrons wash it off.
+            Intercom gains a programmable screen, the desktop mic's mute
+            button physically mutes, and the capture card records computer
+            and turtle screens. Cameras now see the mod's own content -
+            tapes inside decks, display text - and only report players
+            truly in frame.
  - 0.9.14.0 VCR gets a red 12-cell segment display, settable from Lua; mics
             hear the whole world, not just voices, in tiny 16 kHz DFPWM.
  - 0.9.13.0 Capture card records at the monitor's true resolution and exports

@@ -27,10 +27,11 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * desktop stand variant overriding shape and placement. Right-click toggles live.
  */
 public class MicrophoneBlock extends HorizontalDirectionalBlock implements EntityBlock {
-    private static final VoxelShape SHAPE_NORTH = Block.box(2, 2, 14, 14, 14, 16);
-    private static final VoxelShape SHAPE_SOUTH = Block.box(2, 2, 0, 14, 14, 2);
-    private static final VoxelShape SHAPE_EAST = Block.box(0, 2, 2, 2, 14, 14);
-    private static final VoxelShape SHAPE_WEST = Block.box(14, 2, 2, 16, 14, 14);
+    // Matches the intercom model's body: full width, y 4-14, 2 deep on the wall.
+    private static final VoxelShape SHAPE_NORTH = Block.box(0, 4, 14, 16, 14, 16);
+    private static final VoxelShape SHAPE_SOUTH = Block.box(0, 4, 0, 16, 14, 2);
+    private static final VoxelShape SHAPE_EAST = Block.box(0, 4, 0, 2, 14, 16);
+    private static final VoxelShape SHAPE_WEST = Block.box(14, 4, 0, 16, 14, 16);
 
     public MicrophoneBlock(Properties properties) {
         super(properties);

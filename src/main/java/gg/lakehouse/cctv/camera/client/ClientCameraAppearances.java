@@ -136,6 +136,11 @@ public final class ClientCameraAppearances {
                 return gg.lakehouse.cctv.camera.CameraRigAppearances.build(state, camera,
                     ClientCameraAppearances::standaloneModelQuads);
             }
+            if (gg.lakehouse.cctv.camera.CctvAppearances.handles(state)) {
+                return gg.lakehouse.cctv.camera.CctvAppearances.build(state, level, pos,
+                    ClientCameraAppearances::shortTexture,
+                    ClientCameraAppearances::standaloneModelQuads);
+            }
             if (!gg.lakehouse.cctv.camera.BlockEntityAppearances.isDynamic(state)
                 && !(state.getBlock() instanceof net.minecraft.world.level.block.SignBlock)) {
                 return List.of();

@@ -20,46 +20,59 @@ import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import org.joml.Matrix4f;
 
 /**
- * Draws the deck's front-panel readout: a red 12-cell segment display on the
- * screen strip at the top of the face. The font ("38-Segment Display" by
- * PhuWorks, CC BY 3.0; our copy re-centers each glyph's ink in its cell) is
- * strictly monospaced - every glyph has advance 609/2000em - so the layout is
- * pure arithmetic:
- * cell i starts at i * (advance + kern) and lit glyphs land exactly on the
- * ghost template, which is the font's all-38-segments glyph at U+FFFD. Lua
- * text (setDisplay) takes the panel over; otherwise recording shows REC and
- * a counter with a blinking dot, playback shows PLAY and a counter, a tape
- * at rest reads 00:00 and an empty deck blinks 12:00 like every unset VCR
- * ever. Ghost segments take the world's light; lit segments render
+ * Draws the deck's front-panel readout: a red 12-cell dot-matrix display on
+ * the screen strip at the top of the face. The font ("vcr segmented") is a
+ * 6x9 dot grid per character - the last column is mostly the baked seam
+ * between cells - shipped as a bitmap provider whose atlas we bake from the
+ * SVG-OT source (see the font's PNG next to segment_display.json): character
+ * glyphs carry only their lit dots (grayscale = dot intensity, tinted red at
+ * draw time), and the full background grid, reassembled from every glyph's
+ * unlit dots, sits at U+FFFD as the ghost template. The layout is pure
+ * arithmetic: cell i starts at i * (advance + kern) and lit dots land
+ * exactly on the ghost grid. Lua text (setDisplay) takes the panel over; otherwise recording
+ * shows REC and a counter with a blinking dot, playback shows PLAY and a
+ * counter, a tape at rest reads 00:00 and an empty deck blinks 12:00 like
+ * every unset VCR ever. Ghost dots take the world's light; lit dots render
  * fullbright so the display reads in the dark.
  */
 public class VcrRenderer implements BlockEntityRenderer<VcrBlockEntity> {
     public static final ResourceLocation FONT = new ResourceLocation(CCTV.MOD_ID, "segment_display");
-    private static final Style SEGMENT_STYLE = Style.EMPTY.withFont(FONT);
-    /** The font maps its every-segment-on glyph to the replacement character. */
-    private static final String ALL_SEGMENTS = "\uFFFD";
+    static final Style SEGMENT_STYLE = Style.EMPTY.withFont(FONT);
+    /** The atlas maps the all-dots-on background grid to the replacement character. */
+    static final String ALL_SEGMENTS = "\uFFFD";
+    /**
+     * Characters with art in the atlas. Lua can send anything; a character
+     * outside this set draws as a blank cell instead of the missing-glyph box.
+     */
+    static final String CHARSET =
+        "!\"%',./0123456789:;?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
 
     private static final int CELLS = VcrBlockEntity.DISPLAY_CELLS;
-    // Screen element of the model: x 1-15, y 12-15, face at z -0.25/16.
+    // Screen element of the model: x 2-14, y 10-14, face at z -0.25/16.
     private static final float SCREEN_CENTER_X = 0.5F;
-    private static final float SCREEN_CENTER_Y = 13.5F / 16.0F;
+    private static final float SCREEN_CENTER_Y = 12.0F / 16.0F;
     private static final float TEXT_Z = -0.021F;
     /** Usable strip inside the screen frame. */
-    private static final float STRIP_WIDTH = 13.0F / 16.0F;
-    private static final float MAX_TEXT_HEIGHT = 2.4F / 16.0F;
+    private static final float STRIP_WIDTH = 11.0F / 16.0F;
+    private static final float MAX_TEXT_HEIGHT = 3.2F / 16.0F;
+    /** The dot grid is 9 rows tall (6 above the baseline, 3 below). */
+    static final float GLYPH_VISUAL_HEIGHT = 9.0F;
     /**
-     * Glyph cell height at provider size 32: the font's full ascent.
-     * Minecraft's TTF loader anchors glyphs so a full-ascent glyph spans
-     * exactly [y, y + size], so half the size below centers the line on y=0.
+     * Bitmap glyphs render with their top at y + (7 - ascent); ascent is 6,
+     * so the 9-row box spans [y + 1, y + 10] and y = -5.5 centers it on 0.
      */
-    private static final float GLYPH_VISUAL_HEIGHT = 32.0F;
-    private static final float TEXT_TOP = -16.0F;
-    /** Space between cells, in font pixels; the glyph advance is 19.5 of them. */
-    private static final float KERN = 2.8F;
+    static final float TEXT_TOP = -5.5F;
+    /**
+     * Space between cells, in font pixels. The ghost glyph's advance is 7
+     * (6 dot columns plus the 1px gap Minecraft always adds to bitmap
+     * glyphs); -1 cancels Minecraft's gap so cells tile at the grid pitch
+     * and the font's own seam column is the only space between characters.
+     */
+    static final float KERN = -1.0F;
 
-    private static final int GHOST_COLOR = 0xFF2B0B08;
-    private static final int LIT_COLOR = 0xFFFF2E14;
-    private static final int FULL_BRIGHT = LightTexture.FULL_BRIGHT;
+    static final int GHOST_COLOR = 0xFF2B0B08;
+    static final int LIT_COLOR = 0xFFFF2E14;
+    static final int FULL_BRIGHT = LightTexture.FULL_BRIGHT;
 
     public VcrRenderer(BlockEntityRendererProvider.Context context) {
     }
@@ -89,9 +102,10 @@ public class VcrRenderer implements BlockEntityRenderer<VcrBlockEntity> {
         String cells = composeCells(vcr, hasTape, blinkOn, time);
 
         var font = Minecraft.getInstance().font;
-        float digitAdvance = advance(font, '8');
-        if (digitAdvance <= 0) return;
-        float pitch = digitAdvance + KERN;
+        // The ghost glyph is always full-width; lit-dot glyphs may be narrower.
+        float cellAdvance = advance(font, ALL_SEGMENTS);
+        if (cellAdvance <= 0) return;
+        float pitch = cellAdvance + KERN;
         float scale = Math.min(MAX_TEXT_HEIGHT / GLYPH_VISUAL_HEIGHT, STRIP_WIDTH / (CELLS * pitch));
 
         poseStack.pushPose();
@@ -107,20 +121,18 @@ public class VcrRenderer implements BlockEntityRenderer<VcrBlockEntity> {
 
         float left = -CELLS * pitch / 2.0F;
         for (int i = 0; i < CELLS; i++) {
-            float pen = left + i * pitch + KERN / 2.0F;
+            // Ink starts at the slot edge; the glyph's own trailing gap px
+            // (cancelled by the negative kern) needs no re-centering.
+            float pen = left + i * pitch;
             var ghost = Component.literal(ALL_SEGMENTS).withStyle(SEGMENT_STYLE);
             font.drawInBatch(ghost, pen, TEXT_TOP, GHOST_COLOR, false, pose,
                 buffers, Font.DisplayMode.NORMAL, 0, worldLight);
             char c = i < cells.length() ? cells.charAt(i) : ' ';
-            if (c == ' ') continue;
-            // The lit glyph sits on the ghost: polygon offset keeps the coplanar
-            // quads from dithering, and the double draw compounds the few
-            // antialiased pixels (diagonal segment edges) to near-opaque so the
-            // ghost cannot bleed through them. Axis-aligned edges are already
-            // pixel-exact because the font is fitted to the 32px raster grid.
+            if (c == ' ' || CHARSET.indexOf(c) < 0) continue;
+            // The lit dots sit on the ghost: polygon offset keeps the coplanar
+            // quads from dithering. Dots are opaque axis-aligned pixels, so a
+            // single draw covers the ghost cleanly.
             var lit = Component.literal(String.valueOf(c)).withStyle(SEGMENT_STYLE);
-            font.drawInBatch(lit, pen, TEXT_TOP, LIT_COLOR, false, pose,
-                buffers, Font.DisplayMode.POLYGON_OFFSET, 0, FULL_BRIGHT);
             font.drawInBatch(lit, pen, TEXT_TOP, LIT_COLOR, false, pose,
                 buffers, Font.DisplayMode.POLYGON_OFFSET, 0, FULL_BRIGHT);
         }
@@ -128,8 +140,8 @@ public class VcrRenderer implements BlockEntityRenderer<VcrBlockEntity> {
     }
 
     /** Float glyph advance; Font.width ceils to an int, so measure 16 repeats and divide. */
-    private static float advance(Font font, char c) {
-        return font.width(Component.literal(String.valueOf(c).repeat(16)).withStyle(SEGMENT_STYLE)) / 16.0F;
+    static float advance(Font font, String s) {
+        return font.width(Component.literal(s.repeat(16)).withStyle(SEGMENT_STYLE)) / 16.0F;
     }
 
     /** The 12 characters on the panel right now. */

@@ -19,7 +19,11 @@ public final class ClientModEvents {
         event.register(CassetteRenderer.CASSETTE_MODEL);
         event.register(CassetteRenderer.CASSETTE_GLASS_MODEL);
         event.register(CassetteRenderer.CASSETTE_REEL_MODEL);
+        event.register(CompactCassetteItemRenderer.SPRITE_MODEL);
+        event.register(CompactCassetteItemRenderer.MODEL_3D);
+        event.register(CompactCassetteItemRenderer.GLASS_MODEL);
         for (var model : PlaybackDeckRenderer.BUTTON_MODELS) event.register(model);
+        event.register(MicrophoneRenderer.BUTTON_MODEL);
         event.register(CameraRenderer.ARM_MODEL);
         event.register(CameraRenderer.HEAD_MODEL);
     }
@@ -46,9 +50,25 @@ public final class ClientModEvents {
     }
 
     @SubscribeEvent
+    public static void onItemColors(net.minecraftforge.client.event.RegisterColorHandlersEvent.Item event) {
+        // The dyeable colour strip carries the tint; every other index is -1.
+        // VHS: strip is tint index 1 (3D model faces; the flat GUI sprite's
+        // single layer bakes to index 0 and stays clean). Compact: index 2 -
+        // its GUI sprite stacks base/label/strip, so the strip is layer 2,
+        // and the 3D strip faces match.
+        event.register((stack, tintIndex) -> tintIndex == 1
+                ? ((net.minecraft.world.item.DyeableLeatherItem) stack.getItem()).getColor(stack) : -1,
+            ModRegistry.TAPE.get());
+        event.register((stack, tintIndex) -> tintIndex == 2
+                ? ((net.minecraft.world.item.DyeableLeatherItem) stack.getItem()).getColor(stack) : -1,
+            ModRegistry.COMPACT_CASSETTE.get());
+    }
+
+    @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModRegistry.PLAYBACK_DECK_BLOCK_ENTITY.get(), PlaybackDeckRenderer::new);
         event.registerBlockEntityRenderer(ModRegistry.CAMERA_BLOCK_ENTITY.get(), CameraRenderer::new);
         event.registerBlockEntityRenderer(ModRegistry.VCR_BLOCK_ENTITY.get(), VcrRenderer::new);
+        event.registerBlockEntityRenderer(ModRegistry.MICROPHONE_BLOCK_ENTITY.get(), MicrophoneRenderer::new);
     }
 }

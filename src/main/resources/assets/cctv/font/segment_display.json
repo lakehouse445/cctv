@@ -1,10 +1,17 @@
 {
   "providers": [
     {
-      "type": "ttf",
-      "file": "cctv:38segment.ttf",
-      "size": 32.0,
-      "oversample": 1.0
+      "type": "bitmap",
+      "file": "cctv:font/segmented.png",
+      "height": 9,
+      "ascent": 6,
+      "chars": [
+        "!\"%',./012345678",
+        "9:;?ABCDEFGHIJKL",
+        "MNOPQRSTUVWXYZ_a",
+        "bcdefghijklmnopq",
+        "rstuvwxyz�\u0000\u0000\u0000\u0000\u0000\u0000"
+      ]
     }
   ]
 }

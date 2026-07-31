@@ -61,6 +61,23 @@ public class CaptureCardPeripheral implements IPeripheral {
         return blockEntity.frameCount();
     }
 
+    /** "monitor" or "computer"; the choice only matters when both are adjacent. */
+    @LuaFunction(mainThread = true)
+    public final String getSource() {
+        return blockEntity.source().name().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    @LuaFunction(mainThread = true)
+    public final void setSource(String name) throws LuaException {
+        var source = switch (name.toLowerCase(java.util.Locale.ROOT)) {
+            case "monitor" -> CaptureCardBlockEntity.Source.MONITOR;
+            case "computer", "pc" -> CaptureCardBlockEntity.Source.COMPUTER;
+            default -> throw new LuaException("Unknown source (monitor or computer)");
+        };
+        var error = blockEntity.setSource(source);
+        if (error != null) throw new LuaException(error);
+    }
+
     // === Tape ===
 
     @LuaFunction(mainThread = true)

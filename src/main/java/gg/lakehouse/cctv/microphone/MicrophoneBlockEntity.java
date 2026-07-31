@@ -46,6 +46,14 @@ public class MicrophoneBlockEntity extends BlockEntity {
     private final List<PlayingSound> sounds = new ArrayList<>();
     private int activeTail;
     private volatile boolean listening;
+    @javax.annotation.Nullable
+    private String displayText;
+
+    /** Cells on the intercom's little screen. */
+    public static final int DISPLAY_CELLS = 6;
+    // Client-side button travel, owned by MicrophoneRenderer. -1 = unset.
+    public float clientPress = -1;
+    public long clientPressAt;
 
     private static final class PlayingSound {
         byte[] pcm;
@@ -81,6 +89,29 @@ public class MicrophoneBlockEntity extends BlockEntity {
             }
         }
         setChanged();
+        syncToClients();
+    }
+
+    @javax.annotation.Nullable
+    public String displayText() {
+        return displayText;
+    }
+
+    /** Sets the intercom's custom readout, or null to return to the automatic one. */
+    public void setDisplayText(@javax.annotation.Nullable String text) {
+        if (text != null && text.length() > DISPLAY_CELLS) text = text.substring(0, DISPLAY_CELLS);
+        if (java.util.Objects.equals(displayText, text)) return;
+        displayText = text;
+        setChanged();
+        syncToClients();
+    }
+
+    /** The renderers read listening state and display text; push every change. */
+    private void syncToClients() {
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(),
+                net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
+        }
     }
 
     /** Called from the voice network thread with the mono mix and the stereo stage channels. */
@@ -237,11 +268,26 @@ public class MicrophoneBlockEntity extends BlockEntity {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putBoolean("Listening", listening);
+        if (displayText != null) tag.putString("DisplayText", displayText);
     }
 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
         listening = tag.getBoolean("Listening");
+        displayText = tag.contains("DisplayText") ? tag.getString("DisplayText") : null;
+    }
+
+    @Override
+    public CompoundTag getUpdateTag() {
+        var tag = new CompoundTag();
+        tag.putBoolean("Listening", listening);
+        if (displayText != null) tag.putString("DisplayText", displayText);
+        return tag;
+    }
+
+    @Override
+    public net.minecraft.network.protocol.Packet<net.minecraft.network.protocol.game.ClientGamePacketListener> getUpdatePacket() {
+        return net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket.create(this);
     }
 }

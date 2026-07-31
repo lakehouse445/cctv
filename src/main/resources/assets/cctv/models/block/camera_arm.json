@@ -1,20 +1,72 @@
 {
-	"texture_size": [32, 32],
+	"texture_size": [
+		32,
+		32
+	],
 	"textures": {
-		"0": "cctv:block/camera",
+		"1": "cctv:block/camera",
+		"2": "cctv:block/company",
 		"particle": "cctv:block/camera"
 	},
 	"elements": [
 		{
 			"name": "pan",
-			"from": [6.98075, 1.25, 6.81548],
-			"to": [8.98075, 6.25, 8.81548],
-			"rotation": {"angle": 0, "axis": "y", "origin": [7.98075, 4.75, 7.86548]},
+			"from": [
+				6.98075,
+				1.25,
+				6.81548
+			],
+			"to": [
+				8.98075,
+				6.25,
+				8.81548
+			],
+			"rotation": {
+				"angle": 0,
+				"axis": "y",
+				"origin": [
+					7.98075,
+					4.75,
+					7.86548
+				]
+			},
 			"faces": {
-				"north": {"uv": [13.5, 4.5, 14.5, 7], "texture": "#0"},
-				"east": {"uv": [11.5, 4.5, 12.5, 7], "texture": "#0"},
-				"south": {"uv": [12.5, 4.5, 13.5, 7], "texture": "#0"},
-				"west": {"uv": [14.5, 4.5, 15.5, 7], "texture": "#0"}
+				"north": {
+					"uv": [
+						13.5,
+						4.5,
+						14.5,
+						7
+					],
+					"texture": "#1"
+				},
+				"east": {
+					"uv": [
+						11.5,
+						4.5,
+						12.5,
+						7
+					],
+					"texture": "#1"
+				},
+				"south": {
+					"uv": [
+						12.5,
+						4.5,
+						13.5,
+						7
+					],
+					"texture": "#1"
+				},
+				"west": {
+					"uv": [
+						14.5,
+						4.5,
+						15.5,
+						7
+					],
+					"texture": "#1"
+				}
 			}
 		}
 	]

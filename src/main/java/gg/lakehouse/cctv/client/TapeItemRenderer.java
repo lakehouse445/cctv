@@ -31,7 +31,11 @@ public class TapeItemRenderer extends BlockEntityWithoutLevelRenderer {
             var sprite = minecraft.getModelManager().getModel(SPRITE_MODEL);
             minecraft.getItemRenderer().render(stack, context, false, poseStack, buffers, light, overlay, sprite);
         } else {
-            CassetteRenderer.render(stack, context, false, poseStack, buffers, light, overlay);
+            // The display transforms are authored for the right hand; the
+            // left hand needs vanilla's mirroring or the cassette sits askew.
+            boolean leftHand = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND
+                || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
+            CassetteRenderer.render(stack, context, leftHand, poseStack, buffers, light, overlay);
         }
         poseStack.popPose();
     }

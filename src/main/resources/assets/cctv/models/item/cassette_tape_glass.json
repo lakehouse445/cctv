@@ -1,17 +1,38 @@
 {
-	"texture_size": [32, 32],
+	"credit": "lakehouse",
+	"texture_size": [
+		32,
+		32
+	],
 	"textures": {
-		"particle": "cctv:item/cassette_tape",
-		"5": "cctv:item/cassette_tape"
+		"1": "cctv:item/cassette_tape",
+		"particle": "cctv:item/cassette_tape"
 	},
 	"elements": [
 		{
-			"name": "casette_window",
-			"from": [0, 0, 7],
-			"to": [16, 7, 9],
+			"name": "cassette_window",
+			"from": [
+				0,
+				0,
+				7
+			],
+			"to": [
+				16,
+				8,
+				9
+			],
 			"faces": {
-				"north": {"uv": [0, 0, 8, 3.5], "texture": "#5"}
-			}
+				"north": {
+					"uv": [
+						1,
+						8.5,
+						9,
+						12.5
+					],
+					"texture": "#1"
+				}
+			},
+			"shade": false
 		}
 	]
 }

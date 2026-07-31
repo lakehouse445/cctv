@@ -1,0 +1,164 @@
+{
+	"credit": "lakehouse",
+	"textures": {
+		"1": "cctv:item/compact_cassette",
+		"particle": "cctv:item/compact_cassette",
+		"2": "cctv:item/compact_cassette_label"
+	},
+	"elements": [
+		{
+			"name": "tape_window",
+			"from": [
+				1.95,
+				0,
+				7
+			],
+			"to": [
+				13.95,
+				8,
+				9
+			],
+			"faces": {
+				"north": {
+					"uv": [
+						1,
+						1,
+						7,
+						5
+					],
+					"texture": "1"
+				},
+				"south": {
+					"uv": [
+						8,
+						1,
+						14,
+						5
+					],
+					"texture": "1"
+				}
+			},
+			"shade": false
+		},
+		{
+			"name": "tape_backside_window",
+			"from": [
+				13.95,
+				8,
+				8.95
+			],
+			"to": [
+				1.95,
+				0,
+				7.05
+			],
+			"faces": {
+				"north": {
+					"uv": [
+						0.5,
+						9.5,
+						6.5,
+						5.5
+					],
+					"texture": "1"
+				},
+				"south": {
+					"uv": [
+						0.5,
+						5.5,
+						6.5,
+						9.5
+					],
+					"texture": "1"
+				}
+			},
+			"shade": false
+		},
+		{
+			"name": "label_a_side_window",
+			"from": [
+				2.95,
+				3,
+				6.95
+			],
+			"to": [
+				12.95,
+				5,
+				6.95
+			],
+			"rotation": {
+				"angle": 0,
+				"axis": "y",
+				"origin": [
+					5.95,
+					4,
+					4.95
+				]
+			},
+			"faces": {
+				"north": {
+					"uv": [
+						0,
+						6.4,
+						16,
+						12.8
+					],
+					"texture": "2"
+				},
+				"south": {
+					"uv": [
+						16,
+						6.4,
+						0,
+						12.8
+					],
+					"texture": "2"
+				}
+			},
+			"shade": false
+		},
+		{
+			"name": "label_b_side_window",
+			"from": [
+				2.95,
+				3,
+				9.05
+			],
+			"to": [
+				12.95,
+				5,
+				9.05
+			],
+			"rotation": {
+				"angle": 0,
+				"axis": "y",
+				"origin": [
+					5.95,
+					4,
+					7.05
+				]
+			},
+			"faces": {
+				"north": {
+					"uv": [
+						0,
+						6.4,
+						16,
+						12.8
+					],
+					"texture": "2"
+				},
+				"south": {
+					"uv": [
+						16,
+						6.4,
+						0,
+						12.8
+					],
+					"texture": "2"
+				}
+			},
+			"shade": false
+		}
+	]
+}

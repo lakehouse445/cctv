@@ -60,6 +60,13 @@ public final class CCTV {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
+        // Water cauldrons wash the dye off cassette labels, leather-style.
+        event.enqueueWork(() -> {
+            net.minecraft.core.cauldron.CauldronInteraction.WATER.put(
+                ModRegistry.TAPE.get(), net.minecraft.core.cauldron.CauldronInteraction.DYED_ITEM);
+            net.minecraft.core.cauldron.CauldronInteraction.WATER.put(
+                ModRegistry.COMPACT_CASSETTE.get(), net.minecraft.core.cauldron.CauldronInteraction.DYED_ITEM);
+        });
         event.enqueueWork(() -> ForgeComputerCraftAPI.registerPeripheralProvider((level, pos, side) -> {
             var blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof CameraBlockEntity camera) {

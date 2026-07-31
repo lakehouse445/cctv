@@ -82,19 +82,23 @@ public class VcrPeripheral implements IPeripheral {
         return result;
     }
 
-    /** Sets this deck's front-panel readout; call with no text to restore the automatic one. */
+    /**
+     * Sets a front-panel readout. No text restores the automatic one; no
+     * deck index targets the wrapped deck, so any deck can address every
+     * panel in its array: setDisplay("MASTER", 1), setDisplay(nil, 3).
+     */
     @LuaFunction(mainThread = true)
-    public final void setDisplay(Optional<String> text) throws LuaException {
+    public final void setDisplay(Optional<String> text, Optional<Integer> deck) throws LuaException {
         if (text.isPresent() && text.get().length() > VcrBlockEntity.DISPLAY_CELLS) {
             throw new LuaException("Display text is limited to " + VcrBlockEntity.DISPLAY_CELLS + " characters");
         }
-        blockEntity.setDisplayText(text.orElse(null));
+        deckFor(deck).setDisplayText(text.orElse(null));
     }
 
     @Nullable
     @LuaFunction(mainThread = true)
-    public final String getDisplay() {
-        return blockEntity.displayText();
+    public final String getDisplay(Optional<Integer> deck) throws LuaException {
+        return deckFor(deck).displayText();
     }
 
     @LuaFunction(mainThread = true)
@@ -265,6 +269,16 @@ public class VcrPeripheral implements IPeripheral {
     }
 
     // === Helpers ===
+
+    /** This deck when no index is given, else the array deck at the 1-based bottom-up index. */
+    private VcrBlockEntity deckFor(Optional<Integer> index) throws LuaException {
+        if (index.isEmpty()) return blockEntity;
+        var stack = blockEntity.stack();
+        for (var deck : stack) {
+            if (deck.deckIndex() == index.get()) return deck;
+        }
+        throw new LuaException("No deck " + index.get() + " in this array (1.." + stack.size() + ")");
+    }
 
     private UUID requireTape() throws LuaException {
         if (!blockEntity.hasTape()) throw new LuaException("No tape in this deck");

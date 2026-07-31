@@ -13,7 +13,7 @@ public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fp
     private static final java.util.concurrent.atomic.AtomicInteger EXPORT_IDS = new java.util.concurrent.atomic.AtomicInteger();
 
     public enum Action {
-        RECORD, STOP, EXPORT
+        RECORD, STOP, EXPORT, TOGGLE_SOURCE
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -37,6 +37,10 @@ public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fp
                 case RECORD -> captureCard.startRecording(fps);
                 case STOP -> captureCard.stopRecording();
                 case EXPORT -> export(captureCard, player);
+                case TOGGLE_SOURCE -> captureCard.setSource(
+                    captureCard.source() == CaptureCardBlockEntity.Source.MONITOR
+                        ? CaptureCardBlockEntity.Source.COMPUTER
+                        : CaptureCardBlockEntity.Source.MONITOR);
             };
             PacketHandler.sendTo(player, new ClientboundCaptureStatusPacket(captureCard.status(), error == null ? "" : error));
         });

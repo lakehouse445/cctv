@@ -61,6 +61,10 @@ public final class ModRegistry {
     public static final RegistryObject<Item> TAPE = ITEMS.register("tape",
         () -> new TapeItem(new Item.Properties()));
 
+    /** Audio cassette. Model and item only for now; behavior comes in a later pass. */
+    public static final RegistryObject<Item> COMPACT_CASSETTE = ITEMS.register("compact_cassette",
+        () -> new gg.lakehouse.cctv.tape.CompactCassetteItem(new Item.Properties()));
+
     public static final RegistryObject<MicrophoneBlock> INTERCOM = BLOCKS.register("intercom",
         () -> new MicrophoneBlock(BlockBehaviour.Properties.of()
             .mapColor(MapColor.STONE)
@@ -122,13 +126,15 @@ public final class ModRegistry {
             .title(Component.translatable("itemGroup.cctv"))
             .icon(() -> CAPTURE_CARD_ITEM.get().getDefaultInstance())
             .displayItems((params, output) -> {
-                output.accept(CAMERA_ITEM.get());
+                // Full-block peripherals, then the smaller ones, then items.
                 output.accept(CAPTURE_CARD_ITEM.get());
                 output.accept(PLAYBACK_DECK_ITEM.get());
                 output.accept(VCR_ITEM.get());
-                output.accept(TAPE.get());
+                output.accept(CAMERA_ITEM.get());
                 output.accept(INTERCOM_ITEM.get());
                 output.accept(DESKTOP_MICROPHONE_ITEM.get());
+                output.accept(TAPE.get());
+                output.accept(COMPACT_CASSETTE.get());
                 output.accept(CAMERA_LINK.get());
                 output.accept(MICROPHONE_LINK.get());
             })

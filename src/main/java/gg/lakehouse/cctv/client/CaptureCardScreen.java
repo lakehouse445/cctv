@@ -23,6 +23,7 @@ public class CaptureCardScreen extends Screen {
     private Button stopButton;
     private Button exportButton;
     private Button fpsButton;
+    private Button sourceButton;
 
     public CaptureCardScreen(CaptureStatus status) {
         super(Component.literal("Capture Card"));
@@ -44,12 +45,18 @@ public class CaptureCardScreen extends Screen {
         stopButton = addRenderableWidget(Button.builder(Component.literal("Stop"), button -> send(Action.STOP))
             .bounds(centerX + 34, row, 60, 20).build());
         exportButton = addRenderableWidget(Button.builder(Component.literal("Export MP4"), button -> send(Action.EXPORT))
-            .bounds(centerX - 49, row + 26, 98, 20).build());
+            .bounds(centerX - 98, row + 26, 96, 20).build());
+        sourceButton = addRenderableWidget(Button.builder(sourceLabel(), button -> send(Action.TOGGLE_SOURCE))
+            .bounds(centerX + 2, row + 26, 96, 20).build());
         updateButtons();
     }
 
     private Component fpsLabel() {
         return Component.literal("FPS: " + FPS_OPTIONS[fpsIndex]);
+    }
+
+    private Component sourceLabel() {
+        return Component.literal("Source: " + (status.sourceComputer() ? "Computer" : "Monitor"));
     }
 
     private void cycleFps() {
@@ -68,10 +75,14 @@ public class CaptureCardScreen extends Screen {
     }
 
     private void updateButtons() {
-        recordButton.active = !status.recording() && status.hasMonitor() && status.hasTape();
+        recordButton.active = !status.recording() && (status.hasMonitor() || status.hasComputer()) && status.hasTape();
         stopButton.active = status.recording();
         exportButton.active = !status.recording() && status.recordings() > 0;
         fpsButton.active = !status.recording();
+        // The choice only exists when both screens are adjacent.
+        sourceButton.visible = status.hasMonitor() && status.hasComputer();
+        sourceButton.active = !status.recording();
+        sourceButton.setMessage(sourceLabel());
     }
 
     @Override
@@ -81,10 +92,16 @@ public class CaptureCardScreen extends Screen {
         int top = height / 2 - 62;
         graphics.drawCenteredString(font, title, centerX, top, 0xFFFFFF);
 
-        var monitor = status.hasMonitor()
-            ? Component.literal("Monitor: connected").withStyle(ChatFormatting.GREEN)
-            : Component.literal("Monitor: none adjacent").withStyle(ChatFormatting.RED);
-        graphics.drawCenteredString(font, monitor, centerX, top + 16, 0xFFFFFF);
+        // Mirrors the card's fallback: the chosen source when present, else
+        // whichever screen exists.
+        boolean computerFeed = status.sourceComputer()
+            ? status.hasComputer()
+            : !status.hasMonitor() && status.hasComputer();
+        var screen = status.hasMonitor() || status.hasComputer()
+            ? Component.literal("Screen: " + (computerFeed ? "computer" : "monitor") + " connected")
+                .withStyle(ChatFormatting.GREEN)
+            : Component.literal("Screen: no monitor or computer adjacent").withStyle(ChatFormatting.RED);
+        graphics.drawCenteredString(font, screen, centerX, top + 16, 0xFFFFFF);
 
         var tape = status.hasTape()
             ? Component.literal("Tape: " + status.tapeLabel() + " (" + TapeItem.formatBytes(status.usedBytes())

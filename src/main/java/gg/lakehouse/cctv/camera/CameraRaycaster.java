@@ -93,9 +93,11 @@ final class CameraRaycaster {
     private final BlockAppearanceProvider blockAppearance;
     @Nullable
     private final EntityAppearanceProvider entityAppearance;
-    private final Map<Long, Integer> lightCache = new HashMap<>();
+    private final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap lightCache =
+        new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
     /** Per-frame cache of position-dependent geometry (chest lids, sign text). */
-    private final Map<Long, List<TexturedQuad>> dynamicCache = new HashMap<>();
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<List<TexturedQuad>> dynamicCache =
+        new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
 
     private LevelChunk chunk;
     private int chunkX = Integer.MIN_VALUE;
@@ -226,7 +228,7 @@ final class CameraRaycaster {
         return new PixelFrame(width, height, pixels);
     }
 
-    /** Player names painted by the last render, in entity-search order. */
+    /** Player names with surviving pixels in the last render, nearest first. */
     List<String> visiblePlayers() {
         return visiblePlayers;
     }
@@ -316,7 +318,7 @@ final class CameraRaycaster {
                     continue;
                 }
                 depth[index] = t;
-                double shade = lightFactor(litPos(x, y, z, axis, stepX, stepY, stepZ))
+                double shade = litFactor(x, y, z, axis, stepX, stepY, stepZ)
                     * faceFactor(axis, direction);
                 return applyTint(fadeToHorizon(shadeColor(mapColor.col, shade), t), tintR, tintG, tintB);
             }
@@ -370,7 +372,7 @@ final class CameraRaycaster {
                     continue;
                 }
                 depth[index] = hitT[hit];
-                double shade = lightFactor(litPos(x, y, z, axis, stepX, stepY, stepZ))
+                double shade = litFactor(x, y, z, axis, stepX, stepY, stepZ)
                     * faceFactorFromNormal(quad.nx(), quad.ny(), quad.nz());
                 int color = fadeToHorizon(shadeColor(rgb, shade), hitT[hit]);
                 return applyTint(color, tintR, tintG, tintB);
@@ -453,20 +455,35 @@ final class CameraRaycaster {
     }
 
     private List<TexturedQuad> dynamicQuadsAt(BlockState state, int x, int y, int z) {
-        return dynamicCache.computeIfAbsent(BlockPos.asLong(x, y, z),
-            key -> blockAppearance.dynamicQuads(state, level, new BlockPos(x, y, z)));
+        long key = BlockPos.asLong(x, y, z);
+        var cached = dynamicCache.get(key);
+        if (cached == null) {
+            cached = blockAppearance.dynamicQuads(state, level, new BlockPos(x, y, z));
+            dynamicCache.put(key, cached);
+        }
+        return cached;
     }
 
-    private static BlockPos litPos(int x, int y, int z, int axis, int stepX, int stepY, int stepZ) {
+    /** Light sampled in the cell the ray entered the face from: its exposed side. */
+    private double litFactor(int x, int y, int z, int axis, int stepX, int stepY, int stepZ) {
         return switch (axis) {
-            case 0 -> new BlockPos(x - stepX, y, z);
-            case 1 -> new BlockPos(x, y - stepY, z);
-            default -> new BlockPos(x, y, z - stepZ);
+            case 0 -> lightFactor(x - stepX, y, z);
+            case 1 -> lightFactor(x, y - stepY, z);
+            default -> lightFactor(x, y, z - stepZ);
         };
     }
 
     private double lightFactor(BlockPos pos) {
-        int light = lightCache.computeIfAbsent(pos.asLong(), key -> level.getRawBrightness(pos, skyDarken));
+        return lightFactor(pos.getX(), pos.getY(), pos.getZ());
+    }
+
+    private double lightFactor(int x, int y, int z) {
+        long key = BlockPos.asLong(x, y, z);
+        int light = lightCache.getOrDefault(key, -1);
+        if (light < 0) {
+            light = level.getRawBrightness(new BlockPos(x, y, z), skyDarken);
+            lightCache.put(key, light);
+        }
         return 0.25 + 0.75 * light / 15.0;
     }
 
@@ -598,6 +615,12 @@ final class CameraRaycaster {
                 || entity instanceof net.minecraft.world.entity.decoration.LeashFenceKnotEntity
                 || entity instanceof net.minecraft.world.entity.boss.enderdragon.EndCrystal
                 || entity instanceof net.minecraft.world.entity.projectile.Projectile);
+        // Near entities paint first and claim depth, so a fully covered
+        // entity fails the depth test everywhere and painted stays false —
+        // without this, a nearer mob painted later could bury a player's
+        // pixels while the player still reported visible.
+        entities.sort(java.util.Comparator.comparingDouble(
+            entity -> entity.getBoundingBox().getCenter().subtract(origin).dot(forward)));
         var nametags = new ArrayList<Nametag>();
         visiblePlayers.clear();
         for (var entity : entities) {
@@ -629,7 +652,10 @@ final class CameraRaycaster {
                     (bounds.minX + bounds.maxX) / 2, bounds.maxY + 0.4, (bounds.minZ + bounds.maxZ) / 2)));
             }
         }
-        for (var nametag : nametags) paintNametag(pixels, depth, nametag);
+        // Tags don't write depth, so overlap resolves by paint order alone.
+        // The entity sort built this list nearest-first: paint it backwards
+        // so the nearest tag lands last, on top.
+        for (int i = nametags.size() - 1; i >= 0; i--) paintNametag(pixels, depth, nametags.get(i));
     }
 
     // === Nametags ===

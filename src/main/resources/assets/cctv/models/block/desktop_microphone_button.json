@@ -1,0 +1,83 @@
+{
+	"texture_size": [
+		32,
+		32
+	],
+	"textures": {
+		"1": "cctv:block/microphone",
+		"2": "cctv:block/generic_label",
+		"3": "cctv:block/company",
+		"particle": "cctv:block/microphone"
+	},
+	"elements": [
+		{
+			"name": "button",
+			"from": [
+				4.5,
+				1.75,
+				3.75
+			],
+			"to": [
+				11.5,
+				2.75,
+				4.75
+			],
+			"rotation": {
+				"angle": 0,
+				"axis": "y",
+				"origin": [
+					7.5,
+					3,
+					6
+				]
+			},
+			"faces": {
+				"north": {
+					"uv": [
+						12,
+						10,
+						15.5,
+						10.5
+					],
+					"texture": "#1"
+				},
+				"east": {
+					"uv": [
+						12,
+						10,
+						12.5,
+						10.5
+					],
+					"texture": "#1"
+				},
+				"south": {
+					"uv": [
+						15.5,
+						10,
+						12,
+						10.5
+					],
+					"texture": "#1"
+				},
+				"west": {
+					"uv": [
+						15,
+						10,
+						15.5,
+						10.5
+					],
+					"texture": "#1"
+				},
+				"up": {
+					"uv": [
+						15.5,
+						10.5,
+						12,
+						10
+					],
+					"texture": "#1"
+				}
+			}
+		}
+	]
+}
