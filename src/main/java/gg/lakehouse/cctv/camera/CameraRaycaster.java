@@ -454,11 +454,28 @@ final class CameraRaycaster {
         return hits;
     }
 
+    /** Rate limit for appearance-failure logging on per-frame paths. */
+    private static long lastAppearanceError;
+
+    private static void logAppearanceError(String what, Object subject, Exception e) {
+        long now = System.currentTimeMillis();
+        if (now - lastAppearanceError < 10_000) return;
+        lastAppearanceError = now;
+        gg.lakehouse.cctv.CCTV.LOGGER.warn("Camera {} failed for {}; drawing nothing there", what, subject, e);
+    }
+
     private List<TexturedQuad> dynamicQuadsAt(BlockState state, int x, int y, int z) {
         long key = BlockPos.asLong(x, y, z);
         var cached = dynamicCache.get(key);
         if (cached == null) {
-            cached = blockAppearance.dynamicQuads(state, level, new BlockPos(x, y, z));
+            // A block entity in a strange state (a minecart-displayed shulker,
+            // a modded BE) must cost its own pixels, never the level tick.
+            try {
+                cached = blockAppearance.dynamicQuads(state, level, new BlockPos(x, y, z));
+            } catch (Exception e) {
+                logAppearanceError("dynamic geometry", state, e);
+                cached = List.of();
+            }
             dynamicCache.put(key, cached);
         }
         return cached;
@@ -629,8 +646,14 @@ final class CameraRaycaster {
             if (along < 1.0 || along > MAX_DISTANCE) continue;
             double light = lightFactor(BlockPos.containing(bounds.getCenter()));
 
-            List<TexturedQuad> modelQuads = entityAppearance == null ? null
-                : entityAppearance.capture(entity);
+            List<TexturedQuad> modelQuads = null;
+            if (entityAppearance != null) {
+                try {
+                    modelQuads = entityAppearance.capture(entity);
+                } catch (Exception e) {
+                    logAppearanceError("entity capture", entity.getType(), e);
+                }
+            }
             boolean painted;
             if (modelQuads != null && !modelQuads.isEmpty()) {
                 painted = paintEntityModel(pixels, depth, entity, modelQuads, light);

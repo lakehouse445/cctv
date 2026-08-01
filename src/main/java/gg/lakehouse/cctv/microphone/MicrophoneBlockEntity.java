@@ -9,7 +9,10 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * An intercom microphone. A tick-driven mixer folds two source kinds into
@@ -40,9 +43,18 @@ public class MicrophoneBlockEntity extends BlockEntity {
     private final ArrayDeque<byte[][]> chunks = new ArrayDeque<>();
     private byte[][] accumulator = {new byte[CHUNK_SAMPLES], new byte[CHUNK_SAMPLES], new byte[CHUNK_SAMPLES]};
     private int accumulated;
-    /** Voice pieces (three parallel channels each) awaiting the mixer. */
-    private final ArrayDeque<byte[][]> voiceQueue = new ArrayDeque<>();
-    private int voiceOffset;
+    /**
+     * Voice pieces per speaker, mixed in parallel. One shared queue laid
+     * simultaneous speakers end to end on a single timeline: with N voices
+     * the queue filled N times faster than the mixer drained it, so
+     * conversations came out chopped, delayed and alternating.
+     */
+    private final Map<UUID, SpeakerStream> voiceStreams = new HashMap<>();
+
+    private static final class SpeakerStream {
+        final ArrayDeque<byte[][]> pieces = new ArrayDeque<>();
+        int offset;
+    }
     private final List<PlayingSound> sounds = new ArrayList<>();
     private int activeTail;
     private volatile boolean listening;
@@ -80,8 +92,7 @@ public class MicrophoneBlockEntity extends BlockEntity {
         this.listening = listening;
         if (!listening) {
             synchronized (audioLock) {
-                voiceQueue.clear();
-                voiceOffset = 0;
+                voiceStreams.clear();
                 sounds.clear();
                 chunks.clear();
                 accumulated = 0;
@@ -114,12 +125,13 @@ public class MicrophoneBlockEntity extends BlockEntity {
         }
     }
 
-    /** Called from the voice network thread with the mono mix and the stereo stage channels. */
-    public void queueVoice(byte[] mono, byte[] left, byte[] right) {
+    /** Called from the voice network thread with one speaker's mono mix and stereo stage channels. */
+    public void queueVoice(UUID speaker, byte[] mono, byte[] left, byte[] right) {
         if (!listening) return;
         synchronized (audioLock) {
-            if (voiceQueue.size() >= MAX_QUEUED_VOICE) return;
-            voiceQueue.addLast(new byte[][]{mono, left, right});
+            var stream = voiceStreams.computeIfAbsent(speaker, id -> new SpeakerStream());
+            if (stream.pieces.size() >= MAX_QUEUED_VOICE) return;
+            stream.pieces.addLast(new byte[][]{mono, left, right});
         }
     }
 
@@ -172,7 +184,7 @@ public class MicrophoneBlockEntity extends BlockEntity {
 
     /** Under audioLock: one tick of the mixer, voice plus world sounds. */
     private void mixTick() {
-        boolean idle = voiceQueue.isEmpty() && sounds.isEmpty();
+        boolean idle = voiceStreams.isEmpty() && sounds.isEmpty();
         if (idle) {
             if (activeTail <= 0) return;
             activeTail--;
@@ -184,21 +196,28 @@ public class MicrophoneBlockEntity extends BlockEntity {
         var left = new int[TICK_SAMPLES];
         var right = new int[TICK_SAMPLES];
 
-        int filled = 0;
-        while (filled < TICK_SAMPLES && !voiceQueue.isEmpty()) {
-            var piece = voiceQueue.peekFirst();
-            int take = Math.min(TICK_SAMPLES - filled, piece[0].length - voiceOffset);
-            for (int i = 0; i < take; i++) {
-                mono[filled + i] += piece[0][voiceOffset + i];
-                left[filled + i] += piece[1][voiceOffset + i];
-                right[filled + i] += piece[2][voiceOffset + i];
+        // Every speaker consumes the same tick window; simultaneous voices
+        // sum sample by sample instead of queuing behind each other.
+        var streams = voiceStreams.values().iterator();
+        while (streams.hasNext()) {
+            var stream = streams.next();
+            int filled = 0;
+            while (filled < TICK_SAMPLES && !stream.pieces.isEmpty()) {
+                var piece = stream.pieces.peekFirst();
+                int take = Math.min(TICK_SAMPLES - filled, piece[0].length - stream.offset);
+                for (int i = 0; i < take; i++) {
+                    mono[filled + i] += piece[0][stream.offset + i];
+                    left[filled + i] += piece[1][stream.offset + i];
+                    right[filled + i] += piece[2][stream.offset + i];
+                }
+                filled += take;
+                stream.offset += take;
+                if (stream.offset >= piece[0].length) {
+                    stream.pieces.pollFirst();
+                    stream.offset = 0;
+                }
             }
-            filled += take;
-            voiceOffset += take;
-            if (voiceOffset >= piece[0].length) {
-                voiceQueue.pollFirst();
-                voiceOffset = 0;
-            }
+            if (stream.pieces.isEmpty()) streams.remove();
         }
 
         var iterator = sounds.iterator();

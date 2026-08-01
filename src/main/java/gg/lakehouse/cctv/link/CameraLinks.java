@@ -60,6 +60,8 @@ public final class CameraLinks extends SavedData {
     private final List<Link> links = new ArrayList<>();
     /** Live network attachments by camera position; rebuilt as chunks load. */
     private final Map<Long, WiredNode> nodes = new HashMap<>();
+    /** The peripheral instance each node currently publishes; block entities recreate on chunk reload. */
+    private final Map<Long, dan200.computercraft.api.peripheral.IPeripheral> published = new HashMap<>();
 
     public static CameraLinks get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(CameraLinks::load, CameraLinks::new, "cctv_camera_links");
@@ -233,8 +235,27 @@ public final class CameraLinks extends SavedData {
 
     private void attach(ServerLevel level, Link link,
                         dan200.computercraft.api.peripheral.IPeripheral peripheral, WiredElement modemElement) {
-        var existing = nodes.get(link.camera.asLong());
-        if (existing != null) return;
+        long key = link.camera.asLong();
+        var modemNode = modemElement.getNode();
+        var existing = nodes.get(key);
+        if (existing != null) {
+            if (existing.getNetwork() == modemNode.getNetwork()) {
+                // Healthy attachment. The block entity still recreates on
+                // chunk reload, so re-publish when the instance changed or
+                // computers keep a peripheral wrapping a dead block entity.
+                if (published.get(key) != peripheral) {
+                    var name = peripheral.getType() + "_" + Integer.toHexString(link.camera.hashCode());
+                    existing.getNetwork().updatePeripherals(existing, Map.of(name, peripheral));
+                    published.put(key, peripheral);
+                }
+                return;
+            }
+            // The modem's node was rebuilt (chunk reload) and left our node
+            // on a defunct network; without this the link never reattaches.
+            existing.getNetwork().remove(existing);
+            nodes.remove(key);
+            published.remove(key);
+        }
         var element = new WiredElement() {
             private final WiredNode node = ComputerCraftAPI.createWiredNodeForElement(this);
 
@@ -259,14 +280,16 @@ public final class CameraLinks extends SavedData {
             }
         };
         var node = element.getNode();
-        modemElement.getNode().getNetwork().connect(modemElement.getNode(), node);
+        modemNode.getNetwork().connect(modemNode, node);
         var name = peripheral.getType() + "_" + Integer.toHexString(link.camera.hashCode());
         node.getNetwork().updatePeripherals(node, Map.of(name, peripheral));
-        nodes.put(link.camera.asLong(), node);
+        nodes.put(key, node);
+        published.put(key, peripheral);
     }
 
     private void detach(Link link) {
         var node = nodes.remove(link.camera.asLong());
+        published.remove(link.camera.asLong());
         if (node != null) node.getNetwork().remove(node);
     }
 

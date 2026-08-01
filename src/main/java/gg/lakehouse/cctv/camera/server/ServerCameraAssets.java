@@ -215,7 +215,16 @@ public final class ServerCameraAssets {
         }
 
         private List<TexturedQuad> modelQuads(String name) {
-            return modelQuadCache.computeIfAbsent(name, baker::bakeModel);
+            return modelQuadCache.computeIfAbsent(name, key -> {
+                try {
+                    return baker.bakeModel(key);
+                } catch (Exception e) {
+                    // One malformed model JSON must not kill the level tick;
+                    // the client twin already degrades the same way.
+                    gg.lakehouse.cctv.CCTV.LOGGER.warn("Camera failed to bake model {}", key, e);
+                    return List.of();
+                }
+            });
         }
 
         @Override

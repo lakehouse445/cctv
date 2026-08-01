@@ -53,19 +53,26 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
 
         var microphones = MicrophoneRegistry.near(player.level(),
             player.getX(), player.getEyeY(), player.getZ(), MicrophoneBlockEntity.PICKUP_RANGE);
-        if (microphones.isEmpty()) return;
-        if (microphones.stream().noneMatch(MicrophoneBlockEntity::isListening)) return;
+        boolean heard = !microphones.isEmpty()
+            && microphones.stream().anyMatch(MicrophoneBlockEntity::isListening);
 
         var opusData = event.getPacket().getOpusEncodedData();
         if (opusData == null || opusData.length == 0) return;
 
-        var pipeline = pipelines.computeIfAbsent(player.getUUID(), id -> new PlayerPipeline(api.createDecoder()));
-        byte[] samples;
+        // An existing pipeline keeps decoding even while unheard: skipping
+        // packets breaks Opus's predictive state and garbles the first
+        // moments after a microphone goes live mid-sentence.
+        var pipeline = heard
+            ? pipelines.computeIfAbsent(player.getUUID(), id -> new PlayerPipeline(api.createDecoder()))
+            : pipelines.get(player.getUUID());
+        if (pipeline == null) return;
+        short[] samples;
         synchronized (pipeline) {
             var pcm = pipeline.decoder.decode(opusData);
             if (pcm == null || pcm.length == 0) return;
             samples = pipeline.filter.process(pcm);
         }
+        if (!heard) return;
         long now = System.currentTimeMillis();
         if (now - lastHeardLog > 10_000) {
             lastHeardLog = now;
@@ -88,7 +95,7 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
      * in both ears, an off-axis voice loses the far ear — so the stage reads
      * like the mic's own point of view.
      */
-    private static void process(byte[] samples, MicrophoneBlockEntity microphone, ServerPlayer player) {
+    private static void process(short[] samples, MicrophoneBlockEntity microphone, ServerPlayer player) {
         var pos = microphone.getBlockPos();
         double dx = player.getX() - (pos.getX() + 0.5);
         double dy = player.getEyeY() - (pos.getY() + 0.5);
@@ -108,15 +115,21 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
         double leftGain = gain * Math.min(1, 1 - pan);
         double rightGain = gain * Math.min(1, 1 + pan);
 
+        // Gain at 16-bit resolution, then down to the mixer's 8-bit domain.
         var mono = new byte[samples.length];
         var left = new byte[samples.length];
         var right = new byte[samples.length];
         for (int i = 0; i < samples.length; i++) {
-            mono[i] = (byte) Math.round(samples[i] * gain);
-            left[i] = (byte) Math.round(samples[i] * leftGain);
-            right[i] = (byte) Math.round(samples[i] * rightGain);
+            mono[i] = toByte(samples[i] * gain);
+            left[i] = toByte(samples[i] * leftGain);
+            right[i] = toByte(samples[i] * rightGain);
         }
-        microphone.queueVoice(mono, left, right);
+        microphone.queueVoice(player.getUUID(), mono, left, right);
+    }
+
+    private static byte toByte(double sample16) {
+        long value = Math.round(sample16 / 256.0);
+        return (byte) Math.max(-127, Math.min(127, value));
     }
 
     private void onPlayerDisconnected(PlayerDisconnectedEvent event) {

@@ -1,5 +1,11 @@
 0.9
 ===
+ - 0.9.15.2 Camera links survive chunk reloads. Two people can talk over
+            each other on a microphone and both come through; distant
+            voices keep their clarity instead of dissolving into noise.
+            Cameras shrug off broken models, strange minecart cargo and
+            crafted player heads instead of crashing or fetching from
+            attacker-chosen hosts.
  - 0.9.15.1 Hardens the network layer: packet directions pinned, hostile
             size claims and NaN aim rejected. Recordings now commit to tape
             when their chunk unloads instead of vanishing, and tapes keep
