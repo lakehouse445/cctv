@@ -28,6 +28,12 @@ public record ClientboundCameraFramePacket(BlockPos pos, int width, int height,
         var pos = buf.readBlockPos();
         int width = buf.readVarInt();
         int height = buf.readVarInt();
+        // The renderer clamps to MAX_WIDTH/MAX_HEIGHT before sending; a
+        // larger claim is a hostile packet, not a bigger camera.
+        if (width < 0 || width > gg.lakehouse.cctv.camera.CameraBlockEntity.MAX_WIDTH
+            || height < 0 || height > gg.lakehouse.cctv.camera.CameraBlockEntity.MAX_HEIGHT) {
+            throw new io.netty.handler.codec.DecoderException("Camera frame size out of range");
+        }
         var text = new String[height];
         var fg = new String[height];
         var bg = new String[height];

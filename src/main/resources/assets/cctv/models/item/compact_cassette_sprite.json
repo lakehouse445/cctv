@@ -1,9 +1,0 @@
-{
-	"parent": "minecraft:item/generated",
-	"textures": {
-		"layer0": "cctv:item/compact_cassette_sprite",
-		"layer1": "cctv:item/compact_cassette_sprite_label",
-		"layer2": "cctv:item/compact_cassette_sprite_strip"
-	},
-	"gui_light": "front"
-}

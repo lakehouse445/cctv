@@ -1,5 +1,11 @@
 0.9
 ===
+ - 0.9.15.1 Hardens the network layer: packet directions pinned, hostile
+            size claims and NaN aim rejected. Recordings now commit to tape
+            when their chunk unloads instead of vanishing, and tapes keep
+            working past their 999th recording. Cassettes drop their flat
+            GUI sprites and render as their models everywhere, lit and
+            centered like blocks.
  - 0.9.15.0 VCR, camera, intercom and desktop mic remodeled and retextured;
             VCR display reborn on an in-house dot-matrix font. New compact
             cassette item with two-sided anvil labels; VHS reels behind real

@@ -275,6 +275,9 @@ public class PlaybackDeckBlockEntity extends BlockEntity {
     @Nullable
     public String seek(double seconds) {
         if (recordingName == null || frames == null) return "Nothing loaded - play something first";
+        // NaN passes Mth.clamp, fails both tick end conditions (endless
+        // rewind) and would persist through NBT.
+        if (!Double.isFinite(seconds)) return "Seek time must be a number";
         framePosition = Mth.clamp(seconds, 0, lengthSeconds()) * fps;
         lastAppliedFrame = -1;
         markDirtyAndSync();
@@ -431,10 +434,13 @@ public class PlaybackDeckBlockEntity extends BlockEntity {
             if (value.getSerializedName().equals(stateName)) state = value;
         }
         recordingName = tag.contains("Recording") ? tag.getString("Recording") : null;
+        // Heal worlds that saved a NaN position before the seek guard existed.
         framePosition = tag.getDouble("Position");
+        if (!Double.isFinite(framePosition)) framePosition = 0;
         fps = Math.max(1, tag.getInt("Fps"));
         pendingResumeRecording = tag.contains("PendingResumeRecording") ? tag.getString("PendingResumeRecording") : null;
         pendingResumeSeconds = tag.getDouble("PendingResumeSeconds");
+        if (!Double.isFinite(pendingResumeSeconds)) pendingResumeSeconds = 0;
         pressedButton = tag.contains("PressedButton") ? tag.getInt("PressedButton") : -1;
     }
 

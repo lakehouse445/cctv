@@ -240,6 +240,16 @@ public class CaptureCardBlockEntity extends BlockEntity {
         }
     }
 
+    /** A chunk unload mid-recording used to discard every buffered frame; commit instead. */
+    @Override
+    public void onChunkUnloaded() {
+        if (recording) {
+            var error = stopAndCommit();
+            if (error != null) CCTV.LOGGER.warn("Capture card at {} unloaded mid-recording: {}", worldPosition, error);
+        }
+        super.onChunkUnloaded();
+    }
+
     // === Export & status ===
 
     @Nullable

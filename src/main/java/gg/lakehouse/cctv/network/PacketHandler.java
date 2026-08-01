@@ -16,34 +16,42 @@ public final class PacketHandler {
     private PacketHandler() {
     }
 
+    private static final java.util.Optional<net.minecraftforge.network.NetworkDirection> TO_CLIENT =
+        java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT);
+    private static final java.util.Optional<net.minecraftforge.network.NetworkDirection> TO_SERVER =
+        java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER);
+
     public static void register() {
+        // Every registration pins its direction: without it Forge skips
+        // direction validation and a client could feed the server
+        // clientbound packets (screen opens, exports) as if it were a peer.
         int id = 0;
         CHANNEL.registerMessage(id++, ServerboundCaptureActionPacket.class,
-            ServerboundCaptureActionPacket::encode, ServerboundCaptureActionPacket::decode, ServerboundCaptureActionPacket::handle);
+            ServerboundCaptureActionPacket::encode, ServerboundCaptureActionPacket::decode, ServerboundCaptureActionPacket::handle, TO_SERVER);
         CHANNEL.registerMessage(id++, ClientboundOpenCaptureScreenPacket.class,
-            ClientboundOpenCaptureScreenPacket::encode, ClientboundOpenCaptureScreenPacket::decode, ClientboundOpenCaptureScreenPacket::handle);
+            ClientboundOpenCaptureScreenPacket::encode, ClientboundOpenCaptureScreenPacket::decode, ClientboundOpenCaptureScreenPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ClientboundCaptureStatusPacket.class,
-            ClientboundCaptureStatusPacket::encode, ClientboundCaptureStatusPacket::decode, ClientboundCaptureStatusPacket::handle);
+            ClientboundCaptureStatusPacket::encode, ClientboundCaptureStatusPacket::decode, ClientboundCaptureStatusPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ClientboundExportRecordingPacket.class,
-            ClientboundExportRecordingPacket::encode, ClientboundExportRecordingPacket::decode, ClientboundExportRecordingPacket::handle);
+            ClientboundExportRecordingPacket::encode, ClientboundExportRecordingPacket::decode, ClientboundExportRecordingPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ServerboundPlaybackActionPacket.class,
-            ServerboundPlaybackActionPacket::encode, ServerboundPlaybackActionPacket::decode, ServerboundPlaybackActionPacket::handle);
+            ServerboundPlaybackActionPacket::encode, ServerboundPlaybackActionPacket::decode, ServerboundPlaybackActionPacket::handle, TO_SERVER);
         CHANNEL.registerMessage(id++, ClientboundOpenPlaybackScreenPacket.class,
-            ClientboundOpenPlaybackScreenPacket::encode, ClientboundOpenPlaybackScreenPacket::decode, ClientboundOpenPlaybackScreenPacket::handle);
+            ClientboundOpenPlaybackScreenPacket::encode, ClientboundOpenPlaybackScreenPacket::decode, ClientboundOpenPlaybackScreenPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ClientboundPlaybackStatusPacket.class,
-            ClientboundPlaybackStatusPacket::encode, ClientboundPlaybackStatusPacket::decode, ClientboundPlaybackStatusPacket::handle);
+            ClientboundPlaybackStatusPacket::encode, ClientboundPlaybackStatusPacket::decode, ClientboundPlaybackStatusPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ClientboundOpenCameraScreenPacket.class,
-            ClientboundOpenCameraScreenPacket::encode, ClientboundOpenCameraScreenPacket::decode, ClientboundOpenCameraScreenPacket::handle);
+            ClientboundOpenCameraScreenPacket::encode, ClientboundOpenCameraScreenPacket::decode, ClientboundOpenCameraScreenPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ServerboundCameraAdjustPacket.class,
-            ServerboundCameraAdjustPacket::encode, ServerboundCameraAdjustPacket::decode, ServerboundCameraAdjustPacket::handle);
+            ServerboundCameraAdjustPacket::encode, ServerboundCameraAdjustPacket::decode, ServerboundCameraAdjustPacket::handle, TO_SERVER);
         CHANNEL.registerMessage(id++, ClientboundCameraFramePacket.class,
-            ClientboundCameraFramePacket::encode, ClientboundCameraFramePacket::decode, ClientboundCameraFramePacket::handle);
+            ClientboundCameraFramePacket::encode, ClientboundCameraFramePacket::decode, ClientboundCameraFramePacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ClientboundCameraLinksPacket.class,
-            ClientboundCameraLinksPacket::encode, ClientboundCameraLinksPacket::decode, ClientboundCameraLinksPacket::handle);
+            ClientboundCameraLinksPacket::encode, ClientboundCameraLinksPacket::decode, ClientboundCameraLinksPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ClientboundOpenVcrScreenPacket.class,
-            ClientboundOpenVcrScreenPacket::encode, ClientboundOpenVcrScreenPacket::decode, ClientboundOpenVcrScreenPacket::handle);
+            ClientboundOpenVcrScreenPacket::encode, ClientboundOpenVcrScreenPacket::decode, ClientboundOpenVcrScreenPacket::handle, TO_CLIENT);
         CHANNEL.registerMessage(id++, ServerboundVcrDisplayPacket.class,
-            ServerboundVcrDisplayPacket::encode, ServerboundVcrDisplayPacket::decode, ServerboundVcrDisplayPacket::handle);
+            ServerboundVcrDisplayPacket::encode, ServerboundVcrDisplayPacket::decode, ServerboundVcrDisplayPacket::handle, TO_SERVER);
     }
 
     public static void sendTo(ServerPlayer player, Object message) {

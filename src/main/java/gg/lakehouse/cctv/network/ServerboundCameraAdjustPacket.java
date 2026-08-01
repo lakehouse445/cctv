@@ -34,6 +34,8 @@ public record ServerboundCameraAdjustPacket(BlockPos pos, float yaw, float pitch
             if (player == null) return;
             if (player.distanceToSqr(Vec3.atCenterOf(pos)) > 64) return;
             if (!(player.level().getBlockEntity(pos) instanceof CameraBlockEntity camera)) return;
+            // NaN slides through every clamp and would sync to all viewers.
+            if (!Float.isFinite(yaw) || !Float.isFinite(pitch) || !Float.isFinite(zoom)) return;
 
             if (!camera.isLocked()) {
                 if (camera.getYaw() != yaw) camera.setYaw(yaw);

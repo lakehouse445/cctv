@@ -23,7 +23,9 @@ import java.util.stream.Stream;
  * the same idea as CC:T's computer/disk folders.
  */
 public final class TapeStorage {
-    private static final Pattern RECORDING_NAME = Pattern.compile("rec_(\\d{3})\\.bin");
+    // Three digits or more: rec_999's successor is rec_1000, and every
+    // validator must accept it or the tape wedges forever at that name.
+    private static final Pattern RECORDING_NAME = Pattern.compile("rec_(\\d{3,9})\\.bin");
 
     public record RecordingInfo(String name, long bytes, int fps, int frames, long modifiedMs,
                                 @Nullable TermFrame.SegmentInfo segment) {
@@ -52,7 +54,10 @@ public final class TapeStorage {
         var result = new ArrayList<RecordingInfo>();
         if (!Files.isDirectory(dir)) return result;
         try (Stream<Path> files = Files.list(dir)) {
-            for (var file : files.filter(TapeStorage::isRecording).sorted(Comparator.comparing(Path::getFileName)).toList()) {
+            // Numeric order, not lexicographic: rec_1000 comes after rec_999,
+            // and "latest recording" callers rely on the list's tail.
+            for (var file : files.filter(TapeStorage::isRecording)
+                .sorted(Comparator.comparingInt(TapeStorage::recordingIndex)).toList()) {
                 try (InputStream in = Files.newInputStream(file)) {
                     var header = TermFrame.readHeader(in);
                     var name = file.getFileName().toString();
@@ -87,7 +92,7 @@ public final class TapeStorage {
 
     @Nullable
     public static byte[] read(MinecraftServer server, UUID tapeId, String name) {
-        if (!name.matches("rec_\\d{3}")) return null;
+        if (!RECORDING_NAME.matcher(name + ".bin").matches()) return null;
         var file = tapeDir(server, tapeId).resolve(name + ".bin");
         try {
             return Files.isRegularFile(file) ? Files.readAllBytes(file) : null;
@@ -98,7 +103,7 @@ public final class TapeStorage {
     }
 
     public static boolean delete(MinecraftServer server, UUID tapeId, String name) {
-        if (!name.matches("rec_\\d{3}")) return false;
+        if (!RECORDING_NAME.matcher(name + ".bin").matches()) return false;
         try {
             return Files.deleteIfExists(tapeDir(server, tapeId).resolve(name + ".bin"));
         } catch (IOException e) {
@@ -109,6 +114,11 @@ public final class TapeStorage {
 
     private static boolean isRecording(Path path) {
         return RECORDING_NAME.matcher(path.getFileName().toString()).matches();
+    }
+
+    private static int recordingIndex(Path path) {
+        var matcher = RECORDING_NAME.matcher(path.getFileName().toString());
+        return matcher.matches() ? Integer.parseInt(matcher.group(1)) : Integer.MAX_VALUE;
     }
 
     private static long size(Path path) {

@@ -16,15 +16,14 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.client.ForgeHooksClient;
 
 /**
- * Renders the compact cassette as a flat sprite in GUIs (base, dyeable
- * colour strip, label - the strip layer carries tint index 1) and as the
- * 3D model everywhere else: hand, ground, item frames. An anvil rename
+ * Renders the compact cassette as its 3D model everywhere, GUI included -
+ * the model's gui display transform frames it as the inventory icon, and
+ * the dyeable colour strip tints there like anywhere else. An anvil rename
  * writes on the white top band of the label stickers, VHS-style; a "/"
  * in the name splits it into side A and side B ("ROAD TRIP/CHILL MIX"),
  * otherwise both sides carry the same text.
  */
 public class CompactCassetteItemRenderer extends BlockEntityWithoutLevelRenderer {
-    public static final ResourceLocation SPRITE_MODEL = new ResourceLocation(CCTV.MOD_ID, "item/compact_cassette_sprite");
     public static final ResourceLocation MODEL_3D = new ResourceLocation(CCTV.MOD_ID, "item/compact_cassette_3d");
     public static final ResourceLocation GLASS_MODEL = new ResourceLocation(CCTV.MOD_ID, "item/compact_cassette_glass");
 
@@ -47,37 +46,32 @@ public class CompactCassetteItemRenderer extends BlockEntityWithoutLevelRenderer
         // Cancel the -0.5 origin shift ItemRenderer applied before handing off to us.
         poseStack.translate(0.5F, 0.5F, 0.5F);
         var minecraft = Minecraft.getInstance();
-        if (context == ItemDisplayContext.GUI) {
-            var sprite = minecraft.getModelManager().getModel(SPRITE_MODEL);
-            minecraft.getItemRenderer().render(stack, context, false, poseStack, buffers, light, overlay, sprite);
-        } else {
-            var model = minecraft.getModelManager().getModel(MODEL_3D);
-            // The left-hand flag matters: the model's display transforms are
-            // authored for the right hand and rely on vanilla's left-hand
-            // mirroring. Skipping it once made the unmirrored first-person
-            // pose show side B on its own, and the deliberate flip below
-            // silently rotated it back to side A.
-            boolean leftHand = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND
-                || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
-            model = ForgeHooksClient.handleCameraTransforms(poseStack, model, context, leftHand);
-            poseStack.translate(-0.5F, -0.5F, -0.5F);
-            if (isOffhand(context)) {
-                // The offhand holds the cassette flipped, side B out.
-                poseStack.translate(0.5F, 0.0F, 0.5F);
-                poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
-                poseStack.translate(-0.5F, 0.0F, -0.5F);
-            }
-            var buffer = ItemRenderer.getFoilBufferDirect(buffers,
-                Sheets.cutoutBlockSheet(), true, stack.hasFoil());
-            minecraft.getItemRenderer().renderModelLists(model, stack, light, overlay, poseStack, buffer);
-            // Window faces blend on the translucent-cull sheet so the reels
-            // show through; cutout would render their half-alpha pixels solid.
-            var glass = minecraft.getModelManager().getModel(GLASS_MODEL);
-            var translucent = ItemRenderer.getFoilBufferDirect(buffers,
-                Sheets.translucentCullBlockSheet(), true, stack.hasFoil());
-            minecraft.getItemRenderer().renderModelLists(glass, stack, light, overlay, poseStack, translucent);
-            renderLabel(stack, poseStack, buffers, light);
+        var model = minecraft.getModelManager().getModel(MODEL_3D);
+        // The left-hand flag matters: the model's display transforms are
+        // authored for the right hand and rely on vanilla's left-hand
+        // mirroring. Skipping it once made the unmirrored first-person
+        // pose show side B on its own, and the deliberate flip below
+        // silently rotated it back to side A.
+        boolean leftHand = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND
+            || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
+        model = ForgeHooksClient.handleCameraTransforms(poseStack, model, context, leftHand);
+        poseStack.translate(-0.5F, -0.5F, -0.5F);
+        if (isOffhand(context)) {
+            // The offhand holds the cassette flipped, side B out.
+            poseStack.translate(0.5F, 0.0F, 0.5F);
+            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
+            poseStack.translate(-0.5F, 0.0F, -0.5F);
         }
+        var buffer = ItemRenderer.getFoilBufferDirect(buffers,
+            Sheets.cutoutBlockSheet(), true, stack.hasFoil());
+        minecraft.getItemRenderer().renderModelLists(model, stack, light, overlay, poseStack, buffer);
+        // Window faces blend on the translucent-cull sheet so the reels
+        // show through; cutout would render their half-alpha pixels solid.
+        var glass = minecraft.getModelManager().getModel(GLASS_MODEL);
+        var translucent = ItemRenderer.getFoilBufferDirect(buffers,
+            Sheets.translucentCullBlockSheet(), true, stack.hasFoil());
+        minecraft.getItemRenderer().renderModelLists(glass, stack, light, overlay, poseStack, translucent);
+        renderLabel(stack, poseStack, buffers, light);
         poseStack.popPose();
     }
 

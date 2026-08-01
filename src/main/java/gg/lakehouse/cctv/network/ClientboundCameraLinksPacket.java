@@ -35,9 +35,22 @@ public record ClientboundCameraLinksPacket(List<Entry> entries) {
 
     public static ClientboundCameraLinksPacket decode(FriendlyByteBuf buf) {
         int count = buf.readVarInt();
+        // A real entry needs at least 17 bytes on the wire; a count beyond
+        // that bound is a hostile allocation claim.
+        if (count < 0 || count > buf.readableBytes() / 17) {
+            throw new io.netty.handler.codec.DecoderException("Link list size out of range");
+        }
         var entries = new ArrayList<Entry>(count);
         for (int i = 0; i < count; i++) {
-            entries.add(new Entry(buf.readLong(), buf.readLong(), buf.readLongArray()));
+            long camera = buf.readLong();
+            long modem = buf.readLong();
+            int pathLength = buf.readVarInt();
+            if (pathLength < 0 || pathLength > buf.readableBytes() / 8) {
+                throw new io.netty.handler.codec.DecoderException("Link path length out of range");
+            }
+            var path = new long[pathLength];
+            for (int p = 0; p < pathLength; p++) path[p] = buf.readLong();
+            entries.add(new Entry(camera, modem, path));
         }
         return new ClientboundCameraLinksPacket(entries);
     }

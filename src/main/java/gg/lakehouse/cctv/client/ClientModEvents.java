@@ -15,11 +15,9 @@ public final class ClientModEvents {
 
     @SubscribeEvent
     public static void onRegisterAdditionalModels(ModelEvent.RegisterAdditional event) {
-        event.register(TapeItemRenderer.SPRITE_MODEL);
         event.register(CassetteRenderer.CASSETTE_MODEL);
         event.register(CassetteRenderer.CASSETTE_GLASS_MODEL);
         event.register(CassetteRenderer.CASSETTE_REEL_MODEL);
-        event.register(CompactCassetteItemRenderer.SPRITE_MODEL);
         event.register(CompactCassetteItemRenderer.MODEL_3D);
         event.register(CompactCassetteItemRenderer.GLASS_MODEL);
         for (var model : PlaybackDeckRenderer.BUTTON_MODELS) event.register(model);
@@ -51,17 +49,12 @@ public final class ClientModEvents {
 
     @SubscribeEvent
     public static void onItemColors(net.minecraftforge.client.event.RegisterColorHandlersEvent.Item event) {
-        // The dyeable colour strip carries the tint; every other index is -1.
-        // VHS: strip is tint index 1 (3D model faces; the flat GUI sprite's
-        // single layer bakes to index 0 and stays clean). Compact: index 2 -
-        // its GUI sprite stacks base/label/strip, so the strip is layer 2,
-        // and the 3D strip faces match.
+        // Both cassettes' dyeable colour strips carry tint index 1 on their
+        // 3D models (the only models now - GUI renders them too); every
+        // other index is -1.
         event.register((stack, tintIndex) -> tintIndex == 1
                 ? ((net.minecraft.world.item.DyeableLeatherItem) stack.getItem()).getColor(stack) : -1,
-            ModRegistry.TAPE.get());
-        event.register((stack, tintIndex) -> tintIndex == 2
-                ? ((net.minecraft.world.item.DyeableLeatherItem) stack.getItem()).getColor(stack) : -1,
-            ModRegistry.COMPACT_CASSETTE.get());
+            ModRegistry.TAPE.get(), ModRegistry.COMPACT_CASSETTE.get());
     }
 
     @SubscribeEvent

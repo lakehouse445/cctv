@@ -28,8 +28,13 @@ public final class ClientPacketHandlers {
     }
 
     private static final java.util.Map<Integer, byte[][]> PENDING_EXPORTS = new java.util.HashMap<>();
+    /** A full 10 MB tape is 20 chunks; anything past this is not a real export. */
+    private static final int MAX_EXPORT_CHUNKS = 64;
 
     public static void export(ClientboundExportRecordingPacket packet) {
+        if (packet.total() <= 0 || packet.total() > MAX_EXPORT_CHUNKS) return;
+        // Abandoned transfers must not pile up across sessions.
+        if (PENDING_EXPORTS.size() > 8) PENDING_EXPORTS.clear();
         var chunks = PENDING_EXPORTS.computeIfAbsent(packet.exportId(), id -> new byte[packet.total()][]);
         if (packet.index() < 0 || packet.index() >= chunks.length) return;
         chunks[packet.index()] = packet.data();

@@ -374,6 +374,23 @@ public class VcrBlockEntity extends BlockEntity {
         Terminals.applyFrame(terminal, playFrames.get(clamped));
     }
 
+    /**
+     * A chunk unload mid-recording used to discard every buffered frame.
+     * Commit what we have. Only the head deck carries recording state, so
+     * this acts on local fields and never walks the (possibly half-unloaded)
+     * stack for delegation; the stripe/span commit may see fewer decks
+     * during unload and then degrades with its usual warnings instead of
+     * losing the footage outright.
+     */
+    @Override
+    public void onChunkUnloaded() {
+        if (recording) {
+            var error = stopAndCommit();
+            if (error != null) CCTV.LOGGER.warn("VCR array at {} unloaded mid-recording: {}", worldPosition, error);
+        }
+        super.onChunkUnloaded();
+    }
+
     // === Commit paths ===
 
     @Nullable

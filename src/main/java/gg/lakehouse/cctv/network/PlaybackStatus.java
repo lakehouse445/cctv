@@ -44,6 +44,10 @@ public record PlaybackStatus(BlockPos pos, String state, boolean hasMonitor, boo
         double length = buf.readDouble();
         int fps = buf.readVarInt();
         int count = buf.readVarInt();
+        // Each entry needs at least 3 wire bytes; larger counts are hostile.
+        if (count < 0 || count > buf.readableBytes() / 3) {
+            throw new io.netty.handler.codec.DecoderException("Recording list size out of range");
+        }
         var recordings = new ArrayList<Entry>(count);
         for (int i = 0; i < count; i++) {
             recordings.add(new Entry(buf.readUtf(), buf.readVarInt(), buf.readVarInt()));
