@@ -15,9 +15,14 @@ import net.minecraft.network.chat.Component;
 /** Placeholder GUI: status readout plus Record / Stop / Export buttons. Real art later. */
 public class CaptureCardScreen extends Screen {
     private static final int[] FPS_OPTIONS = {1, 2, 5, 10, 20};
+    private static final int REFRESH_TICKS = 5;
+    /** An action's error must outlive the next poll reply, or it flashes for a frame. */
+    private static final long ERROR_HOLD_MS = 3000;
 
     private CaptureStatus status;
     private String error = "";
+    private long errorUntil;
+    private int refreshCounter;
     private int fpsIndex = 2; // 5 fps
     private Button recordButton;
     private Button stopButton;
@@ -70,8 +75,22 @@ public class CaptureCardScreen extends Screen {
 
     public void setStatus(CaptureStatus status, String error) {
         this.status = status;
-        this.error = error;
+        if (!error.isEmpty()) {
+            this.error = error;
+            this.errorUntil = System.currentTimeMillis() + ERROR_HOLD_MS;
+        } else if (System.currentTimeMillis() >= errorUntil) {
+            this.error = "";
+        }
         updateButtons();
+    }
+
+    /** Live tape/screen state while the screen is open, like the playback deck. */
+    @Override
+    public void tick() {
+        if (++refreshCounter >= REFRESH_TICKS) {
+            refreshCounter = 0;
+            send(Action.REFRESH);
+        }
     }
 
     private void updateButtons() {

@@ -28,6 +28,20 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     private static final int FORMAT_V3 = 3;
 
     /**
+     * The 20 Hz tick can only deliver frame rates that divide 20; a request
+     * for 7 fps used to record at 5 while the header claimed 7. Snap to the
+     * nearest deliverable rate so the header always tells the truth.
+     */
+    public static int snapFps(int requested) {
+        int clamped = Math.max(1, Math.min(20, requested));
+        int best = 1;
+        for (int rate : new int[]{1, 2, 4, 5, 10, 20}) {
+            if (Math.abs(rate - clamped) < Math.abs(best - clamped)) best = rate;
+        }
+        return best;
+    }
+
+    /**
      * Links one file to a recording group spread over several tapes.
      * index orders segments in time, lane/lanes describe striping
      * (lane 0 of 1 = not striped), totalFrames is -1 for open loop chains.

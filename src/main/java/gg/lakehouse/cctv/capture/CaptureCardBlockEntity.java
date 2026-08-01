@@ -11,7 +11,6 @@ import gg.lakehouse.cctv.tape.TapeStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -177,7 +176,7 @@ public class CaptureCardBlockEntity extends BlockEntity {
             ? TermFrame.MonitorInfo.derive(monitor.getWidth(), monitor.getHeight(),
                 terminal.getWidth(), terminal.getHeight())
             : null;
-        fps = Mth.clamp(requestedFps, 1, 20);
+        fps = TermFrame.snapFps(requestedFps);
         frames.clear();
         tickCounter = 0;
         recording = true;

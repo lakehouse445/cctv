@@ -12,8 +12,9 @@ import java.util.function.Supplier;
 public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fps) {
     private static final java.util.concurrent.atomic.AtomicInteger EXPORT_IDS = new java.util.concurrent.atomic.AtomicInteger();
 
+    /** REFRESH is appended last: enum ordinals are the wire format. */
     public enum Action {
-        RECORD, STOP, EXPORT, TOGGLE_SOURCE
+        RECORD, STOP, EXPORT, TOGGLE_SOURCE, REFRESH
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -41,6 +42,7 @@ public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fp
                     captureCard.source() == CaptureCardBlockEntity.Source.MONITOR
                         ? CaptureCardBlockEntity.Source.COMPUTER
                         : CaptureCardBlockEntity.Source.MONITOR);
+                case REFRESH -> null; // status poll; the reply below is the payload
             };
             PacketHandler.sendTo(player, new ClientboundCaptureStatusPacket(captureCard.status(), error == null ? "" : error));
         });

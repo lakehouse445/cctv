@@ -17,8 +17,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(ServerLevel.class)
 public class ServerLevelMixin {
+    private static volatile long cctv$lastTapError;
+
     @Inject(method = "levelEvent", at = @At("HEAD"))
     private void cctv$levelEvent(Player player, int type, BlockPos pos, int data, CallbackInfo callback) {
-        LevelEventSounds.handle((ServerLevel) (Object) this, type, pos, data);
+        // A microphone bug must never take vanilla level events down with it.
+        try {
+            LevelEventSounds.handle((ServerLevel) (Object) this, type, pos, data);
+        } catch (Exception e) {
+            long now = System.currentTimeMillis();
+            if (now - cctv$lastTapError > 10_000) {
+                cctv$lastTapError = now;
+                gg.lakehouse.cctv.CCTV.LOGGER.warn("Microphone level-event tap failed", e);
+            }
+        }
     }
 }

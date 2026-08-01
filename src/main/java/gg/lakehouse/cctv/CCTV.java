@@ -29,6 +29,9 @@ public final class CCTV {
             (net.minecraftforge.event.server.ServerStartedEvent event) ->
                 gg.lakehouse.cctv.camera.server.ServerCameraAssets.begin(event.getServer()));
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+            (net.minecraftforge.event.server.ServerStoppedEvent event) ->
+                gg.lakehouse.cctv.microphone.sound.SoundAssets.reset());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
             (net.minecraftforge.event.TickEvent.LevelTickEvent event) -> {
                 if (event.phase == net.minecraftforge.event.TickEvent.Phase.END
                     && event.level instanceof net.minecraft.server.level.ServerLevel serverLevel

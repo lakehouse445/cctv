@@ -17,6 +17,7 @@ import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -460,6 +461,11 @@ final class ServerEntityAppearances {
         return steve;
     }
 
+    /** Only Mojang's texture host; profile properties are attacker-influenced. */
+    private static final String SKIN_HOST = "textures.minecraft.net";
+    private static final int SKIN_TIMEOUT_MS = 5000;
+    private static final int MAX_SKIN_BYTES = 512 * 1024;
+
     private void downloadSkin(ServerPlayer player, TexturePixels fallback) {
         try {
             var textures = player.getGameProfile().getProperties().get("textures");
@@ -471,9 +477,24 @@ final class ServerEntityAppearances {
             var skin = payload.getAsJsonObject("SKIN");
             boolean slim = skin.has("metadata") && skin.getAsJsonObject("metadata").has("model")
                 && "slim".equals(skin.getAsJsonObject("metadata").get("model").getAsString());
+            var url = new URL(skin.get("url").getAsString());
+            var protocol = url.getProtocol();
+            if (!"http".equals(protocol) && !"https".equals(protocol)) {
+                throw new IOException("Refusing skin URL protocol: " + protocol);
+            }
+            var host = url.getHost() == null ? "" : url.getHost().toLowerCase(java.util.Locale.ROOT);
+            if (!SKIN_HOST.equals(host)) {
+                throw new IOException("Refusing skin host: " + host);
+            }
+            var connection = url.openConnection();
+            connection.setConnectTimeout(SKIN_TIMEOUT_MS);
+            connection.setReadTimeout(SKIN_TIMEOUT_MS);
             byte[] data;
-            try (InputStream in = new URL(skin.get("url").getAsString()).openStream()) {
-                data = in.readAllBytes();
+            try (InputStream in = connection.getInputStream()) {
+                data = in.readNBytes(MAX_SKIN_BYTES + 1);
+            }
+            if (data.length > MAX_SKIN_BYTES) {
+                throw new IOException("Skin exceeds " + MAX_SKIN_BYTES + " bytes");
             }
             var image = ImageIO.read(new ByteArrayInputStream(data));
             if (image.getHeight() == 32) image = expandLegacySkin(image);

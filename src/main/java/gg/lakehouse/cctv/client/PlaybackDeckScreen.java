@@ -24,9 +24,12 @@ public class PlaybackDeckScreen extends Screen {
     private static final int REFRESH_TICKS = 5;
     private static final int PAGE_SIZE = 4;
     private static final int BAR_WIDTH = 200;
+    /** An action's error must outlive the next poll reply, or it flashes for a frame. */
+    private static final long ERROR_HOLD_MS = 3000;
 
     private PlaybackStatus status;
     private String error = "";
+    private long errorUntil;
     private int page;
     private String listSignature = "";
     private int refreshCounter;
@@ -92,7 +95,12 @@ public class PlaybackDeckScreen extends Screen {
 
     public void setStatus(PlaybackStatus status, String error) {
         this.status = status;
-        this.error = error;
+        if (!error.isEmpty()) {
+            this.error = error;
+            this.errorUntil = System.currentTimeMillis() + ERROR_HOLD_MS;
+        } else if (System.currentTimeMillis() >= errorUntil) {
+            this.error = "";
+        }
         rebuildList();
         updateButtons();
     }

@@ -1,5 +1,13 @@
 0.9
 ===
+ - 0.9.15.3 Microphone sound table loads in the background, so a server no
+            longer freezes at boot waiting on Mojang, and one bad mod jar
+            can't mute world sounds forever. Recording fps snaps to rates
+            the game can actually deliver, so tape headers tell the truth.
+            A VCR demoted mid-recording commits its footage instead of
+            losing it. The capture card GUI updates live, on-screen errors
+            linger long enough to read, and entity skins obey the same
+            single-host rule as player heads.
  - 0.9.15.2 Camera links survive chunk reloads. Two people can talk over
             each other on a microphone and both come through; distant
             voices keep their clarity instead of dissolving into noise.

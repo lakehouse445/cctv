@@ -25,11 +25,13 @@ public class VcrDisplayScreen extends Screen {
 
     @Override
     protected void init() {
+        // init() reruns on window resize; keep whatever was typed.
+        var text = textBox == null ? initial : textBox.getValue();
         int centerX = width / 2;
         int row = height / 2 - 10;
         textBox = new EditBox(font, centerX - 90, row, 180, 20, Component.literal("Display text"));
         textBox.setMaxLength(VcrBlockEntity.DISPLAY_CELLS);
-        textBox.setValue(initial);
+        textBox.setValue(text);
         addRenderableWidget(textBox);
         addRenderableWidget(Button.builder(Component.literal("Set"), button -> send(textBox.getValue()))
             .bounds(centerX - 90, row + 26, 88, 20).build());

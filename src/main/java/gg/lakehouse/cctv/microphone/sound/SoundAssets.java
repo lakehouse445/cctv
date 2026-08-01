@@ -40,6 +40,7 @@ public final class SoundAssets {
     private static final String MC_VERSION = "1.20.1";
     /** Longest clip worth mixing; protects the cache from jukebox-length files. */
     private static final int MAX_CLIP_SECONDS = 30;
+    private static final int TIMEOUT_MS = 10_000;
     private static final int CACHE_CLIPS = 128;
 
     private record Variant(String namespace, String name, float volume, float pitch, int weight, boolean redirect,
@@ -51,7 +52,10 @@ public final class SoundAssets {
     }
 
     private static SoundAssets instance;
+    private static boolean pending;
     private static boolean failed;
+    /** Bumped on reset; a build finishing for a stopped server discards itself. */
+    private static int generation;
 
     private final Path cacheDir;
     private final Map<String, List<Variant>> registry = new HashMap<>();
@@ -70,18 +74,58 @@ public final class SoundAssets {
     });
     private final Random random = new Random();
 
-    /** Null when the asset chain is unavailable (offline server, bad manifest). */
+    /**
+     * Null while unavailable: not yet built, or the asset chain failed. The
+     * build downloads Mojang's asset index and scans every mod jar, so it
+     * runs in the background — the first seconds of world sounds after boot
+     * go unheard instead of the server thread stalling on the network.
+     */
     @Nullable
     public static synchronized SoundAssets get(MinecraftServer server) {
-        if (instance != null) return instance;
-        if (failed) return null;
-        try {
-            instance = new SoundAssets(server.getServerDirectory().toPath().resolve("cctv-assets"));
-            return instance;
-        } catch (Exception e) {
-            failed = true;
-            CCTV.LOGGER.warn("Sound assets unavailable; microphones will only hear voices", e);
-            return null;
+        if (instance != null || failed || pending) return instance;
+        pending = true;
+        int gen = generation;
+        var dir = server.getServerDirectory().toPath().resolve("cctv-assets");
+        net.minecraft.Util.backgroundExecutor().execute(() -> {
+            SoundAssets built = null;
+            try {
+                built = new SoundAssets(dir);
+            } catch (Exception e) {
+                CCTV.LOGGER.warn("Sound assets unavailable; microphones will only hear voices", e);
+            }
+            publish(gen, built);
+        });
+        return null;
+    }
+
+    private static synchronized void publish(int gen, @Nullable SoundAssets built) {
+        pending = false;
+        if (gen != generation) {
+            // The server stopped while this build ran; discard it.
+            if (built != null) built.close();
+            return;
+        }
+        if (built == null) failed = true;
+        else instance = built;
+    }
+
+    /** Server stopped: drop jar handles and let the next server rebuild fresh. */
+    public static synchronized void reset() {
+        generation++;
+        failed = false;
+        pending = false;
+        var old = instance;
+        instance = null;
+        if (old != null) old.close();
+    }
+
+    private void close() {
+        loader.shutdownNow();
+        for (var zip : modJars) {
+            try {
+                zip.close();
+            } catch (IOException ignored) {
+            }
         }
     }
 
@@ -221,7 +265,14 @@ public final class SoundAssets {
             indexJson = fetchText(indexUrl);
             Files.writeString(indexFile, indexJson, StandardCharsets.UTF_8);
         }
-        var objects = JsonParser.parseString(indexJson).getAsJsonObject().getAsJsonObject("objects");
+        JsonObject objects;
+        try {
+            objects = JsonParser.parseString(indexJson).getAsJsonObject().getAsJsonObject("objects");
+        } catch (Exception e) {
+            // A corrupt cached index heals itself on the next boot.
+            Files.deleteIfExists(indexFile);
+            throw e;
+        }
         for (var entry : objects.entrySet()) {
             vanillaObjects.put(entry.getKey(), entry.getValue().getAsJsonObject().get("hash").getAsString());
         }
@@ -235,15 +286,22 @@ public final class SoundAssets {
             soundsJson = fetchText(OBJECTS_CDN + soundsHash.substring(0, 2) + "/" + soundsHash);
             Files.writeString(soundsFile, soundsJson, StandardCharsets.UTF_8);
         }
-        parseSoundsJson("minecraft", soundsJson);
+        try {
+            parseSoundsJson("minecraft", soundsJson);
+        } catch (Exception e) {
+            // A corrupt cached sounds.json heals itself on the next boot.
+            Files.deleteIfExists(soundsFile);
+            throw e;
+        }
     }
 
     private void loadModRegistries() {
         for (var mod : LoadingModList.get().getModFiles()) {
             var path = mod.getFile().getFilePath();
             if (!Files.isRegularFile(path) || !path.toString().endsWith(".jar")) continue;
+            ZipFile zip = null;
             try {
-                var zip = new ZipFile(path.toFile());
+                zip = new ZipFile(path.toFile());
                 boolean sounds = false;
                 var entries = zip.entries();
                 while (entries.hasMoreElements()) {
@@ -252,14 +310,24 @@ public final class SoundAssets {
                     if (!match.startsWith("assets/") || !match.endsWith("/sounds.json")) continue;
                     var parts = match.split("/");
                     if (parts.length != 3) continue;
+                    // One malformed sounds.json must cost its own mod's
+                    // sounds, never the whole microphone pipeline.
                     try (var in = zip.getInputStream(entry)) {
                         parseSoundsJson(parts[1], new String(in.readAllBytes(), StandardCharsets.UTF_8));
                         sounds = true;
+                    } catch (Exception e) {
+                        CCTV.LOGGER.warn("Skipping malformed sounds.json in {}", path.getFileName());
                     }
                 }
                 if (sounds) modJars.add(zip);
                 else zip.close();
-            } catch (IOException ignored) {
+            } catch (Exception e) {
+                if (zip != null) {
+                    try {
+                        zip.close();
+                    } catch (IOException ignored) {
+                    }
+                }
             }
         }
     }
@@ -304,7 +372,10 @@ public final class SoundAssets {
     }
 
     private static byte[] fetchBytes(String url) throws IOException {
-        try (InputStream in = new URL(url).openStream()) {
+        var connection = new URL(url).openConnection();
+        connection.setConnectTimeout(TIMEOUT_MS);
+        connection.setReadTimeout(TIMEOUT_MS);
+        try (InputStream in = connection.getInputStream()) {
             return in.readAllBytes();
         }
     }

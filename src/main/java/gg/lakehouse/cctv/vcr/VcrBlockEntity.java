@@ -252,7 +252,7 @@ public class VcrBlockEntity extends BlockEntity {
         if (!loopMode && head.decksWithSpace().isEmpty()) return "No tape with free space in the array";
         if (head.findMonitor() == null) return "No monitor next to the array";
         if (head.targetTerminal() == null) return "Monitor is blank - wrap it with a computer first";
-        head.fps = Mth.clamp(requestedFps, 1, 20);
+        head.fps = TermFrame.snapFps(requestedFps);
         head.frames.clear();
         head.tickCounter = 0;
         head.loop = loopMode;
@@ -319,7 +319,16 @@ public class VcrBlockEntity extends BlockEntity {
     // === Ticking (primary only) ===
 
     public void serverTick() {
-        if (!isPrimary()) return;
+        if (!isPrimary()) {
+            // This deck was the head until someone stacked a VCR under it.
+            // Its buffered frames live here, invisible to the new head, so
+            // commit them instead of letting them rot in a field.
+            if (recording) {
+                var error = stopAndCommit();
+                if (error != null) CCTV.LOGGER.warn("VCR array at {} demoted mid-recording: {}", worldPosition, error);
+            }
+            return;
+        }
         if (recording) tickRecording();
         else if (playing) tickPlayback();
         else setDisplay(DISPLAY_IDLE);
