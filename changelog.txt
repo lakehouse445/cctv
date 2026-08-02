@@ -1,5 +1,15 @@
 0.9
 ===
+ - 0.9.15.4 The camera scope wears its real housing: live picture behind the
+            lens glass, and yaw, pitch and zoom on three LED readouts with a
+            hand-made minus digit. Servers shrug off packet spam - camera
+            renders and exports are rate limited, hostile packet values
+            bounce at decode, and spectators can't press buttons. Sign,
+            banner and map caches stop growing forever; maps update on
+            camera instead of freezing. Ejecting a tape or breaking a deck
+            mid-recording commits the footage first. Recording buffers get
+            a hard memory ceiling, and voice decoders, microphones and
+            camera assets all clean up when the server stops.
  - 0.9.15.3 Microphone sound table loads in the background, so a server no
             longer freezes at boot waiting on Mojang, and one bad mod jar
             can't mute world sounds forever. Recording fps snaps to rates

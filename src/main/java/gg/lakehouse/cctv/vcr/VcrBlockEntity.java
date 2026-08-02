@@ -40,6 +40,12 @@ import java.util.UUID;
  */
 public class VcrBlockEntity extends BlockEntity {
     public static final int MAX_FRAMES = 3000;
+    /**
+     * Estimated heap cap for buffered frames; recording commits at the cap.
+     * Sized to the existing ceiling (MAX_FRAMES standard frames), so it only
+     * trips when frames run larger than the recording standard.
+     */
+    public static final long MAX_BUFFER_BYTES = 256L * 1024 * 1024;
     public static final int DEFAULT_FPS = 5;
     /** Segment size for spanned/looped recordings. */
     public static final int SEGMENT_FRAMES = 500;
@@ -66,6 +72,7 @@ public class VcrBlockEntity extends BlockEntity {
     private int loopSegmentIndex;
     private int fps = DEFAULT_FPS;
     private int tickCounter;
+    private long bufferBytes;
 
     // Playback state, only meaningful on the primary:
     @Nullable
@@ -165,11 +172,23 @@ public class VcrBlockEntity extends BlockEntity {
     }
 
     public ItemStack ejectTape() {
+        // The tape is part of the array's recording pool; flush in-flight
+        // footage onto the pool (this tape included) before it walks away.
+        commitIfRecording();
         var ejected = tape;
         tape = ItemStack.EMPTY;
         updateFillState();
         setChanged();
         return ejected;
+    }
+
+    /** Tape ejection and block removal both flush in-flight footage. */
+    void commitIfRecording() {
+        var head = primary();
+        if (head.recording) {
+            var error = head.stopAndCommit();
+            if (error != null) CCTV.LOGGER.warn("VCR array at {} interrupted mid-recording: {}", worldPosition, error);
+        }
     }
 
     void updateFillState() {
@@ -254,6 +273,7 @@ public class VcrBlockEntity extends BlockEntity {
         if (head.targetTerminal() == null) return "Monitor is blank - wrap it with a computer first";
         head.fps = TermFrame.snapFps(requestedFps);
         head.frames.clear();
+        head.bufferBytes = 0;
         head.tickCounter = 0;
         head.loop = loopMode;
         head.loopGroup = loopMode ? UUID.randomUUID() : null;
@@ -345,13 +365,15 @@ public class VcrBlockEntity extends BlockEntity {
             if (error != null) CCTV.LOGGER.warn("VCR array at {}: {}", worldPosition, error);
             return;
         }
-        frames.add(FrameScaler.toRecordingSize(TermFrame.capture(terminal)));
+        var captured = FrameScaler.toRecordingSize(TermFrame.capture(terminal));
+        frames.add(captured);
+        bufferBytes += captured.estimatedBytes();
         if (loop) {
             if (frames.size() >= SEGMENT_FRAMES) {
                 var error = commitLoopSegment();
                 if (error != null) CCTV.LOGGER.warn("VCR array at {}: {}", worldPosition, error);
             }
-        } else if (frames.size() >= MAX_FRAMES) {
+        } else if (frames.size() >= MAX_FRAMES || bufferBytes >= MAX_BUFFER_BYTES) {
             var error = stopAndCommit();
             if (error != null) CCTV.LOGGER.warn("VCR array at {}: {}", worldPosition, error);
         }
@@ -426,6 +448,7 @@ public class VcrBlockEntity extends BlockEntity {
             }
         }
         frames.clear();
+        bufferBytes = 0;
         refreshAllDecks();
         return error;
     }
@@ -495,6 +518,7 @@ public class VcrBlockEntity extends BlockEntity {
         var server = level == null ? null : level.getServer();
         if (server == null || loopGroup == null) {
             frames.clear();
+            bufferBytes = 0;
             return "Array is not loaded";
         }
         int index = loopSegmentIndex++;
@@ -529,6 +553,7 @@ public class VcrBlockEntity extends BlockEntity {
             error = "Failed to write to the array";
         }
         frames.clear();
+        bufferBytes = 0;
         refreshAllDecks();
         return error;
     }

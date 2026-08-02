@@ -37,7 +37,21 @@ public class CCTVVoicechatPlugin implements VoicechatPlugin {
     @Override
     public void initialize(VoicechatApi api) {
         this.api = api;
+        // Native Opus decoders survive a singleplayer world change unless
+        // something closes them; the cleanup registry fires on server stop.
+        gg.lakehouse.cctv.ServerCleanup.register(this::closeAllPipelines);
         CCTV.LOGGER.info("CC:TV voice chat integration active");
+    }
+
+    private void closeAllPipelines() {
+        var iterator = pipelines.values().iterator();
+        while (iterator.hasNext()) {
+            var pipeline = iterator.next();
+            iterator.remove();
+            synchronized (pipeline) {
+                pipeline.decoder.close();
+            }
+        }
     }
 
     @Override

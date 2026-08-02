@@ -31,7 +31,6 @@ import org.joml.Matrix4f;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
@@ -43,7 +42,7 @@ import java.util.function.Function;
  * block, so authoring-space conventions cannot misplace a model.
  */
 public final class BlockEntityAppearances {
-    private static final Map<String, TexturePixels> BANNER_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, TexturePixels> BANNER_CACHE = TextureLru.create(256);
 
     private BlockEntityAppearances() {
     }

@@ -54,6 +54,12 @@ public final class ServerCameraAssets {
         });
     }
 
+    /** Server stop: drop the provider so the next boot rebuilds fresh state. */
+    public static void reset() {
+        provider = null;
+        starting = false;
+    }
+
     @Nullable
     public static BlockAppearanceProvider blocks() {
         return provider;

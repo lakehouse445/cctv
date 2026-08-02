@@ -4,7 +4,6 @@ import gg.lakehouse.cctv.camera.CameraBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.Mth;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -14,6 +13,18 @@ import java.util.function.Supplier;
  * the camera is locked) and answers with a fresh frame at the requested size.
  */
 public record ServerboundCameraAdjustPacket(BlockPos pos, float yaw, float pitch, float zoom, int width, int height) {
+    /**
+     * One frame render per player per tick. A render is up to 13k raycasts
+     * on the server thread; the stock scope sends at most one packet per
+     * tick, so only a modified client ever hits this.
+     */
+    private static final java.util.Map<java.util.UUID, Long> LAST_RENDER_TICK =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void clearThrottle() {
+        LAST_RENDER_TICK.clear();
+    }
+
     public void encode(FriendlyByteBuf buf) {
         buf.writeBlockPos(pos);
         buf.writeFloat(yaw);
@@ -30,12 +41,14 @@ public record ServerboundCameraAdjustPacket(BlockPos pos, float yaw, float pitch
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            var player = ctx.get().getSender();
+            var player = PacketHandler.validSender(ctx.get(), pos);
             if (player == null) return;
-            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > 64) return;
             if (!(player.level().getBlockEntity(pos) instanceof CameraBlockEntity camera)) return;
             // NaN slides through every clamp and would sync to all viewers.
             if (!Float.isFinite(yaw) || !Float.isFinite(pitch) || !Float.isFinite(zoom)) return;
+            long gameTime = player.serverLevel().getGameTime();
+            var lastTick = LAST_RENDER_TICK.put(player.getUUID(), gameTime);
+            if (lastTick != null && lastTick >= gameTime) return;
 
             if (!camera.isLocked()) {
                 if (camera.getYaw() != yaw) camera.setYaw(yaw);

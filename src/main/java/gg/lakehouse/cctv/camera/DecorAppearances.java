@@ -18,7 +18,6 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
@@ -28,7 +27,8 @@ import java.util.function.Function;
  * Shared by both camera pipelines.
  */
 public final class DecorAppearances {
-    private static final Map<Integer, TexturePixels> MAP_CACHE = new ConcurrentHashMap<>();
+    /** Keyed by map id + contents hash, so an explored map updates on camera. */
+    private static final Map<Long, TexturePixels> MAP_CACHE = TextureLru.create(64);
 
     private DecorAppearances() {
     }
@@ -157,9 +157,10 @@ public final class DecorAppearances {
     private static TexturePixels mapTexture(ItemStack stack, net.minecraft.server.level.ServerLevel level) {
         var id = MapItem.getMapId(stack);
         if (id == null) return null;
-        return MAP_CACHE.computeIfAbsent(id, mapId -> {
-            var data = MapItem.getSavedData(stack, level);
-            if (data == null) return null;
+        var data = MapItem.getSavedData(stack, level);
+        if (data == null) return null;
+        long key = (long) id << 32 | (java.util.Arrays.hashCode(data.colors) & 0xFFFFFFFFL);
+        return MAP_CACHE.computeIfAbsent(key, mapKey -> {
             var argb = new int[128 * 128];
             for (int i = 0; i < argb.length; i++) {
                 int abgr = MapColor.getColorFromPackedId(data.colors[i]);

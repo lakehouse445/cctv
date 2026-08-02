@@ -4,7 +4,6 @@ import gg.lakehouse.cctv.playback.PlaybackDeckBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -22,15 +21,14 @@ public record ServerboundPlaybackActionPacket(BlockPos pos, Action action, Strin
     }
 
     public static ServerboundPlaybackActionPacket decode(FriendlyByteBuf buf) {
-        return new ServerboundPlaybackActionPacket(buf.readBlockPos(), buf.readEnum(Action.class),
-            buf.readUtf(), buf.readDouble());
+        return new ServerboundPlaybackActionPacket(buf.readBlockPos(),
+            PacketHandler.readEnum(buf, Action.class), buf.readUtf(), buf.readDouble());
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            var player = ctx.get().getSender();
+            var player = PacketHandler.validSender(ctx.get(), pos);
             if (player == null) return;
-            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > 64) return;
             if (!(player.level().getBlockEntity(pos) instanceof PlaybackDeckBlockEntity deck)) return;
 
             String error = switch (action) {

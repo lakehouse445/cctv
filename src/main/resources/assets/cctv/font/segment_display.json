@@ -10,7 +10,7 @@
         "9:;?ABCDEFGHIJKL",
         "MNOPQRSTUVWXYZ_a",
         "bcdefghijklmnopq",
-        "rstuvwxyz�\u0000\u0000\u0000\u0000\u0000\u0000"
+        "rstuvwxyz�-\u0000\u0000\u0000\u0000\u0000"
       ]
     }
   ]

@@ -27,6 +27,11 @@ public record TermFrame(int width, int height, int[] palette, String[] text, Str
     /** V3 adds the recorded monitor's physical size, so exports match its face. */
     private static final int FORMAT_V3 = 3;
 
+    /** Rough heap footprint of a buffered frame, for recording byte budgets. */
+    public long estimatedBytes() {
+        return 6L * width * height + 256;
+    }
+
     /**
      * The 20 Hz tick can only deliver frame rates that divide 20; a request
      * for 7 fps used to record at 5 while the header claimed 7. Snap to the

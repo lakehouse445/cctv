@@ -45,7 +45,7 @@ public class VcrRenderer implements BlockEntityRenderer<VcrBlockEntity> {
      * outside this set draws as a blank cell instead of the missing-glyph box.
      */
     static final String CHARSET =
-        "!\"%',./0123456789:;?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+        "!\"%',./0123456789:;?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz-";
 
     private static final int CELLS = VcrBlockEntity.DISPLAY_CELLS;
     // Screen element of the model: x 2-14, y 10-14, face at z -0.25/16.

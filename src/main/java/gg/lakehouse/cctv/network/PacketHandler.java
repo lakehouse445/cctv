@@ -8,7 +8,14 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class PacketHandler {
-    private static final String PROTOCOL = "1";
+    /**
+     * Bump on ANY packet change: added, removed, reordered, or a changed
+     * field list. Two builds that differ but share a version connect and
+     * then mis-decode each other's packets.
+     * History: 1 = 0.9.x pre-VCR-screen; 2 = 0.9.15.4 (VCR screen packets,
+     * capture REFRESH).
+     */
+    private static final String PROTOCOL = "2";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
         new ResourceLocation(CCTV.MOD_ID, "main"), () -> PROTOCOL, PROTOCOL::equals, PROTOCOL::equals);
@@ -56,5 +63,32 @@ public final class PacketHandler {
 
     public static void sendTo(ServerPlayer player, Object message) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), message);
+    }
+
+    /**
+     * readEnum without the ArrayIndexOutOfBoundsException a hostile ordinal
+     * causes; DecoderException is the channel's own reject path.
+     */
+    static <E extends Enum<E>> E readEnum(net.minecraft.network.FriendlyByteBuf buf, Class<E> type) {
+        int ordinal = buf.readVarInt();
+        var values = type.getEnumConstants();
+        if (ordinal < 0 || ordinal >= values.length) {
+            throw new io.netty.handler.codec.DecoderException(
+                "Bad " + type.getSimpleName() + " ordinal " + ordinal);
+        }
+        return values[ordinal];
+    }
+
+    /**
+     * Shared gate for serverbound handlers: a real, non-spectator sender
+     * within vanilla container reach of the block. Null means drop the packet.
+     */
+    @javax.annotation.Nullable
+    static ServerPlayer validSender(net.minecraftforge.network.NetworkEvent.Context ctx,
+                                    net.minecraft.core.BlockPos pos) {
+        var player = ctx.getSender();
+        if (player == null || player.isSpectator()) return null;
+        if (player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos)) > 64) return null;
+        return player;
     }
 }

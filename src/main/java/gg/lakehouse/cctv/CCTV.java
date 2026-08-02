@@ -29,8 +29,7 @@ public final class CCTV {
             (net.minecraftforge.event.server.ServerStartedEvent event) ->
                 gg.lakehouse.cctv.camera.server.ServerCameraAssets.begin(event.getServer()));
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
-            (net.minecraftforge.event.server.ServerStoppedEvent event) ->
-                gg.lakehouse.cctv.microphone.sound.SoundAssets.reset());
+            (net.minecraftforge.event.server.ServerStoppedEvent event) -> onServerStopped());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
             (net.minecraftforge.event.TickEvent.LevelTickEvent event) -> {
                 if (event.phase == net.minecraftforge.event.TickEvent.Phase.END
@@ -53,6 +52,16 @@ public final class CCTV {
         net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
             () -> () -> net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
                 gg.lakehouse.cctv.client.CameraLinkRenderer::onRenderLevel));
+    }
+
+    /** A stopped server leaves nothing behind for the next session in this JVM. */
+    private static void onServerStopped() {
+        gg.lakehouse.cctv.microphone.sound.SoundAssets.reset();
+        gg.lakehouse.cctv.microphone.MicrophoneRegistry.clear();
+        gg.lakehouse.cctv.camera.server.ServerCameraAssets.reset();
+        gg.lakehouse.cctv.network.ServerboundCameraAdjustPacket.clearThrottle();
+        gg.lakehouse.cctv.network.ServerboundCaptureActionPacket.clearThrottle();
+        ServerCleanup.run();
     }
 
     private static void syncLinks(net.minecraft.world.entity.player.Player player) {

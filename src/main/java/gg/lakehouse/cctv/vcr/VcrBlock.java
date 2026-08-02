@@ -68,9 +68,13 @@ public class VcrBlock extends HorizontalDirectionalBlock implements EntityBlock 
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof VcrBlockEntity vcr
-            && vcr.hasTape()) {
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), vcr.ejectTape());
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof VcrBlockEntity vcr) {
+            // Even a tapeless deck can be the head holding buffered footage;
+            // commit before this deck leaves the array.
+            vcr.commitIfRecording();
+            if (vcr.hasTape()) {
+                Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), vcr.ejectTape());
+            }
         }
         super.onRemove(state, level, pos, newState, isMoving);
     }

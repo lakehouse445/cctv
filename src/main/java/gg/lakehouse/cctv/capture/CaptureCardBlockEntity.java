@@ -29,6 +29,13 @@ import java.util.UUID;
  */
 public class CaptureCardBlockEntity extends BlockEntity {
     public static final int MAX_FRAMES = 3000;
+    /**
+     * Estimated heap cap for buffered frames; recording commits at the cap.
+     * Native-resolution monitor frames are big - without a ceiling a long
+     * recording of an oversized source walks the server into an
+     * OutOfMemoryError. Sized so max-size-monitor recordings never trip it.
+     */
+    public static final long MAX_BUFFER_BYTES = 256L * 1024 * 1024;
     public static final int DEFAULT_FPS = 5;
 
     /** What the card points at. The choice only matters when both are adjacent. */
@@ -42,6 +49,7 @@ public class CaptureCardBlockEntity extends BlockEntity {
     private boolean recording;
     private int fps = DEFAULT_FPS;
     private int tickCounter;
+    private long bufferBytes;
     private Source source = Source.MONITOR;
     @Nullable
     private TermFrame.MonitorInfo monitorInfo;
@@ -178,6 +186,7 @@ public class CaptureCardBlockEntity extends BlockEntity {
             : null;
         fps = TermFrame.snapFps(requestedFps);
         frames.clear();
+        bufferBytes = 0;
         tickCounter = 0;
         recording = true;
         return null;
@@ -214,6 +223,7 @@ public class CaptureCardBlockEntity extends BlockEntity {
             }
         }
         frames.clear();
+        bufferBytes = 0;
         setChanged();
         return error;
     }
@@ -232,8 +242,10 @@ public class CaptureCardBlockEntity extends BlockEntity {
         }
         // Raw monitor resolution: the export renders the true face; playback
         // rescales to whatever screen plays the tape.
-        frames.add(TermFrame.capture(terminal));
-        if (frames.size() >= MAX_FRAMES) {
+        var captured = TermFrame.capture(terminal);
+        frames.add(captured);
+        bufferBytes += captured.estimatedBytes();
+        if (frames.size() >= MAX_FRAMES || bufferBytes >= MAX_BUFFER_BYTES) {
             var error = stopAndCommit();
             if (error != null) CCTV.LOGGER.warn("Capture card at {}: {}", worldPosition, error);
         }

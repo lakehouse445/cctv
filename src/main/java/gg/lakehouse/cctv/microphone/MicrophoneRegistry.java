@@ -22,6 +22,11 @@ public final class MicrophoneRegistry {
         MICROPHONES.remove(microphone);
     }
 
+    /** Server stop: the block entities are gone; drop any stragglers. */
+    public static void clear() {
+        MICROPHONES.clear();
+    }
+
     /** Listening microphones in a level, for the ambient simulator. */
     public static List<MicrophoneBlockEntity> listening(Level level) {
         var result = new ArrayList<MicrophoneBlockEntity>();

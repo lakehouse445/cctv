@@ -4,13 +4,20 @@ import gg.lakehouse.cctv.capture.CaptureCardBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
 public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fps) {
     private static final java.util.concurrent.atomic.AtomicInteger EXPORT_IDS = new java.util.concurrent.atomic.AtomicInteger();
+    /** An export pushes a whole recording to the client; no request loops. */
+    private static final java.util.Map<java.util.UUID, Long> LAST_EXPORT_TICK =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int EXPORT_COOLDOWN_TICKS = 100;
+
+    public static void clearThrottle() {
+        LAST_EXPORT_TICK.clear();
+    }
 
     /** REFRESH is appended last: enum ordinals are the wire format. */
     public enum Action {
@@ -24,14 +31,14 @@ public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fp
     }
 
     public static ServerboundCaptureActionPacket decode(FriendlyByteBuf buf) {
-        return new ServerboundCaptureActionPacket(buf.readBlockPos(), buf.readEnum(Action.class), buf.readVarInt());
+        return new ServerboundCaptureActionPacket(buf.readBlockPos(),
+            PacketHandler.readEnum(buf, Action.class), buf.readVarInt());
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            var player = ctx.get().getSender();
+            var player = PacketHandler.validSender(ctx.get(), pos);
             if (player == null) return;
-            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > 64) return;
             if (!(player.level().getBlockEntity(pos) instanceof CaptureCardBlockEntity captureCard)) return;
 
             String error = switch (action) {
@@ -52,6 +59,12 @@ public record ServerboundCaptureActionPacket(BlockPos pos, Action action, int fp
     private static String export(CaptureCardBlockEntity captureCard, ServerPlayer player) {
         if (captureCard.isRecording()) return "Stop recording first";
         if (!captureCard.hasTape()) return "No tape in the capture card";
+        long now = player.serverLevel().getGameTime();
+        var lastTick = LAST_EXPORT_TICK.get(player.getUUID());
+        if (lastTick != null && now - lastTick < EXPORT_COOLDOWN_TICKS) {
+            return "Export cooling down - try again in a moment";
+        }
+        LAST_EXPORT_TICK.put(player.getUUID(), now);
         var data = captureCard.exportLatest();
         if (data == null) return "Nothing on this tape";
         int chunkBytes = ClientboundExportRecordingPacket.CHUNK_BYTES;

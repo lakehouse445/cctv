@@ -15,7 +15,6 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Sign text on camera: the sign's front lines rasterize into a transparent
@@ -24,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * matches the geometry-pack boards the block pipeline emits.
  */
 public final class SignTextAppearances {
-    private static final Map<String, TexturePixels> TEXT_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, TexturePixels> TEXT_CACHE = TextureLru.create(256);
     /** Texture width in font pixels: one block of board at sign scale. */
     private static final int TEXT_WIDTH = 96;
     /** Vanilla's sign line height in font pixels. */
