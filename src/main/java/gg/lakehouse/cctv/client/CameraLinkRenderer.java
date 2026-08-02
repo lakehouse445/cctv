@@ -12,11 +12,14 @@ import gg.lakehouse.cctv.network.ClientboundCameraLinksPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Block;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Holding a Camera Link or Microphone Link shows the linking overlay through
@@ -125,6 +128,14 @@ public final class CameraLinkRenderer {
         RenderSystem.enableDepthTest();
     }
 
+    /**
+     * The naive version read 41^3 = 68921 block states plus a reverse
+     * registry lookup each, once a second, on the render thread - a visible
+     * hitch. This walks chunk sections instead: an all-air section skips
+     * wholesale (most of the cube, in any normal world), air blocks skip
+     * before any classification, and the wired-modem registry lookup
+     * memoizes per Block instance.
+     */
     private static void scan(BlockPos center) {
         CAMERAS.clear();
         MICROPHONES.clear();
@@ -132,26 +143,57 @@ public final class CameraLinkRenderer {
         var level = Minecraft.getInstance().level;
         if (level == null) return;
         int radius = 20;
-        var cursor = new BlockPos.MutableBlockPos();
-        for (int x = -radius; x <= radius; x++) {
-            for (int y = -radius; y <= radius; y++) {
-                for (int z = -radius; z <= radius; z++) {
-                    cursor.set(center.getX() + x, center.getY() + y, center.getZ() + z);
-                    var state = level.getBlockState(cursor);
-                    if (state.getBlock() instanceof CameraBlock) {
-                        CAMERAS.add(cursor.immutable());
-                    } else if (state.getBlock() instanceof MicrophoneBlock) {
-                        MICROPHONES.add(cursor.immutable());
-                    } else {
-                        var name = ForgeRegistries.BLOCKS.getKey(state.getBlock());
-                        if (name != null && "computercraft".equals(name.getNamespace())
-                            && name.getPath().contains("wired_modem")) {
-                            MODEMS.add(cursor.immutable());
+        int minX = center.getX() - radius;
+        int maxX = center.getX() + radius;
+        int minY = Math.max(level.getMinBuildHeight(), center.getY() - radius);
+        int maxY = Math.min(level.getMaxBuildHeight() - 1, center.getY() + radius);
+        int minZ = center.getZ() - radius;
+        int maxZ = center.getZ() + radius;
+        for (int chunkX = minX >> 4; chunkX <= maxX >> 4; chunkX++) {
+            for (int chunkZ = minZ >> 4; chunkZ <= maxZ >> 4; chunkZ++) {
+                var chunk = level.getChunkSource().getChunk(chunkX, chunkZ, false);
+                if (chunk == null) continue;
+                int x0 = Math.max(minX, chunkX << 4);
+                int x1 = Math.min(maxX, (chunkX << 4) + 15);
+                int z0 = Math.max(minZ, chunkZ << 4);
+                int z1 = Math.min(maxZ, (chunkZ << 4) + 15);
+                for (int sectionY = minY >> 4; sectionY <= maxY >> 4; sectionY++) {
+                    int index = chunk.getSectionIndexFromSectionY(sectionY);
+                    if (index < 0 || index >= chunk.getSectionsCount()) continue;
+                    var section = chunk.getSection(index);
+                    if (section.hasOnlyAir()) continue;
+                    int y0 = Math.max(minY, sectionY << 4);
+                    int y1 = Math.min(maxY, (sectionY << 4) + 15);
+                    for (int y = y0; y <= y1; y++) {
+                        for (int z = z0; z <= z1; z++) {
+                            for (int x = x0; x <= x1; x++) {
+                                var state = section.getBlockState(x & 15, y & 15, z & 15);
+                                if (state.isAir()) continue;
+                                var block = state.getBlock();
+                                if (block instanceof CameraBlock) {
+                                    CAMERAS.add(new BlockPos(x, y, z));
+                                } else if (block instanceof MicrophoneBlock) {
+                                    MICROPHONES.add(new BlockPos(x, y, z));
+                                } else if (isWiredModem(block)) {
+                                    MODEMS.add(new BlockPos(x, y, z));
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    /** Reverse registry lookups are not free; each Block classifies once. */
+    private static final Map<Block, Boolean> MODEM_BLOCKS = new HashMap<>();
+
+    private static boolean isWiredModem(Block block) {
+        return MODEM_BLOCKS.computeIfAbsent(block, b -> {
+            var name = ForgeRegistries.BLOCKS.getKey(b);
+            return name != null && "computercraft".equals(name.getNamespace())
+                && name.getPath().contains("wired_modem");
+        });
     }
 
     private static void box(com.mojang.blaze3d.vertex.BufferBuilder builder, org.joml.Matrix4f matrix,

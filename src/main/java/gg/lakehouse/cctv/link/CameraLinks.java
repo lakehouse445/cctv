@@ -40,6 +40,15 @@ public final class CameraLinks extends SavedData {
     public static final int MODEM_LIMIT = 6;
     private static final int MAX_FAILS = 5;
     private static final int MAX_PATH_VISITS = 4096;
+    /**
+     * A failed BFS floods up to MAX_PATH_VISITS blocks (~24k state reads).
+     * At most this many searches run per maintenance pass, and a link that
+     * just failed one waits out a backoff before trying again; the cheap
+     * pathValid check still runs every pass, so strikes and reconnects keep
+     * their timing.
+     */
+    private static final int REROUTES_PER_PASS = 2;
+    private static final int REROUTE_BACKOFF_TICKS = 40;
 
     public static final class Link {
         public BlockPos modem;
@@ -49,6 +58,8 @@ public final class CameraLinks extends SavedData {
         public int fails;
         /** Consecutive fast-tick checks with no path; meters fail strikes. */
         int brokenChecks;
+        /** Game time before which this link skips reroute searches; not persisted. */
+        long nextRerouteAt;
 
         Link(BlockPos modem, BlockPos camera, List<BlockPos> path) {
             this.modem = modem;
@@ -186,6 +197,7 @@ public final class CameraLinks extends SavedData {
 
     public void tick(ServerLevel level) {
         boolean changed = false;
+        int rerouteBudget = REROUTES_PER_PASS;
         var iterator = links.iterator();
         while (iterator.hasNext()) {
             var link = iterator.next();
@@ -204,7 +216,13 @@ public final class CameraLinks extends SavedData {
                 link.fails = 0;
                 link.brokenChecks = 0;
             } else {
-                var fresh = findPath(level, link.camera, link.modem);
+                List<BlockPos> fresh = null;
+                long now = level.getGameTime();
+                if (rerouteBudget > 0 && now >= link.nextRerouteAt) {
+                    rerouteBudget--;
+                    fresh = findPath(level, link.camera, link.modem);
+                    if (fresh == null) link.nextRerouteAt = now + REROUTE_BACKOFF_TICKS;
+                }
                 if (fresh != null) {
                     link.path = fresh;
                     link.fails = 0;
