@@ -1,5 +1,9 @@
 0.9
 ===
+ - 0.9.15.5 The scope's picture draws as one textured quad instead of
+            twenty-one thousand tiny rectangles per frame - the image bakes
+            into a texture only when a new frame arrives, so the scope no
+            longer taxes the frame rate.
  - 0.9.15.4 The camera scope wears its real housing: live picture behind the
             lens glass, and yaw, pitch and zoom on three LED readouts with a
             hand-made minus digit. Servers shrug off packet spam - camera

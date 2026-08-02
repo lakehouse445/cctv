@@ -11,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -55,7 +56,9 @@ public class CameraScreen extends Screen {
     private float pitch;
     private float zoom;
     @Nullable
-    private ClientboundCameraFramePacket frame;
+    private DynamicTexture frameTexture;
+    @Nullable
+    private ResourceLocation frameTextureId;
     private int refreshCounter;
     private boolean aimDirty = true;
 
@@ -71,8 +74,62 @@ public class CameraScreen extends Screen {
         return pos;
     }
 
+    /**
+     * Bakes the teletext frame into a texture, once per packet. The scope
+     * used to repaint ~21000 fill quads every render frame for a picture
+     * that only changes ten times a second; now the change is a small
+     * texture upload here and render() draws a single blit.
+     */
     public void setFrame(ClientboundCameraFramePacket frame) {
-        this.frame = frame;
+        int pixelsWide = frame.width() * 2;
+        int pixelsTall = frame.height() * 3;
+        var pixels = frameTexture == null ? null : frameTexture.getPixels();
+        if (pixels == null || pixels.getWidth() != pixelsWide || pixels.getHeight() != pixelsTall) {
+            releaseFrameTexture();
+            frameTexture = new DynamicTexture(pixelsWide, pixelsTall, false);
+            frameTextureId = Minecraft.getInstance().getTextureManager().register("cctv_scope", frameTexture);
+            pixels = frameTexture.getPixels();
+            if (pixels == null) return;
+        }
+        for (int cy = 0; cy < frame.height(); cy++) {
+            var text = frame.text()[cy];
+            var fg = frame.fg()[cy];
+            var bg = frame.bg()[cy];
+            for (int cx = 0; cx < frame.width(); cx++) {
+                char glyph = text.charAt(cx);
+                int bits = glyph >= 128 && glyph < 160 ? glyph - 128 : 0;
+                int fgColor = frame.palette()[Math.max(0, Character.digit(fg.charAt(cx), 16))];
+                int bgColor = frame.palette()[Math.max(0, Character.digit(bg.charAt(cx), 16))];
+                for (int sy = 0; sy < 3; sy++) {
+                    for (int sx = 0; sx < 2; sx++) {
+                        int bit = sy * 2 + sx;
+                        // Bit 5 (bottom-right) is always background in the teletext glyphs.
+                        int color = bit < 5 && (bits >> bit & 1) != 0 ? fgColor : bgColor;
+                        pixels.setPixelRGBA(cx * 2 + sx, cy * 3 + sy, toAbgr(color));
+                    }
+                }
+            }
+        }
+        frameTexture.upload();
+    }
+
+    /** NativeImage packs 0xAABBGGRR; the frame palette is 0x00RRGGBB. */
+    private static int toAbgr(int rgb) {
+        return 0xFF000000 | ((rgb & 0xFF0000) >> 16) | (rgb & 0xFF00) | ((rgb & 0xFF) << 16);
+    }
+
+    private void releaseFrameTexture() {
+        if (frameTextureId != null) {
+            Minecraft.getInstance().getTextureManager().release(frameTextureId);
+            frameTextureId = null;
+            frameTexture = null;
+        }
+    }
+
+    @Override
+    public void removed() {
+        releaseFrameTexture();
+        super.removed();
     }
 
     @Override
@@ -127,43 +184,18 @@ public class CameraScreen extends Screen {
         int side = Math.round(LENS_SIZE * scale);
         int x = (width - side) / 2;
         int y = (height - side) / 2;
-        if (frame != null) {
-            renderFrame(graphics, x + Math.round(GLASS.x() * scale), y + Math.round(GLASS.y() * scale),
-                Math.round(GLASS.w() * scale), Math.round(GLASS.h() * scale));
+        var pixels = frameTexture == null ? null : frameTexture.getPixels();
+        if (frameTextureId != null && pixels != null) {
+            graphics.blit(frameTextureId,
+                x + Math.round(GLASS.x() * scale), y + Math.round(GLASS.y() * scale),
+                Math.round(GLASS.w() * scale), Math.round(GLASS.h() * scale),
+                0.0F, 0.0F, pixels.getWidth(), pixels.getHeight(), pixels.getWidth(), pixels.getHeight());
         }
         renderScope(graphics, x, y, side, scale);
 
         var hint = Component.literal("Drag to aim · Scroll to zoom").withStyle(ChatFormatting.GRAY);
         graphics.drawCenteredString(font, hint, width / 2, height - 12, 0xFFFFFF);
         super.render(graphics, mouseX, mouseY, partialTick);
-    }
-
-    /** Draws the teletext frame: each cell is 2x3 subpixels, scaled to fill the glass. */
-    private void renderFrame(GuiGraphics graphics, int gx, int gy, int gw, int gh) {
-        int pixelsWide = frame.width() * 2;
-        int pixelsTall = frame.height() * 3;
-        for (int cy = 0; cy < frame.height(); cy++) {
-            var text = frame.text()[cy];
-            var fg = frame.fg()[cy];
-            var bg = frame.bg()[cy];
-            for (int cx = 0; cx < frame.width(); cx++) {
-                char glyph = text.charAt(cx);
-                int bits = glyph >= 128 && glyph < 160 ? glyph - 128 : 0;
-                int fgColor = 0xFF000000 | frame.palette()[Math.max(0, Character.digit(fg.charAt(cx), 16))];
-                int bgColor = 0xFF000000 | frame.palette()[Math.max(0, Character.digit(bg.charAt(cx), 16))];
-                for (int sy = 0; sy < 3; sy++) {
-                    for (int sx = 0; sx < 2; sx++) {
-                        int bit = sy * 2 + sx;
-                        // Bit 5 (bottom-right) is always background in the teletext glyphs.
-                        int color = bit < 5 && (bits >> bit & 1) != 0 ? fgColor : bgColor;
-                        int px = cx * 2 + sx;
-                        int py = cy * 3 + sy;
-                        graphics.fill(gx + px * gw / pixelsWide, gy + py * gh / pixelsTall,
-                            gx + (px + 1) * gw / pixelsWide, gy + (py + 1) * gh / pixelsTall, color);
-                    }
-                }
-            }
-        }
     }
 
     /**
