@@ -1,5 +1,8 @@
 0.9
 ===
+ - 0.9.15.7 Link path search aims at the modem instead of flooding blindly:
+            it finds the shortest solid run between the two, and links
+            reach much further through solid terrain on the same budget.
  - 0.9.15.6 Holding a link item no longer hitches the frame rate once a
             second - the device scan skips empty air wholesale. Broken
             camera links reroute on a budget with a short backoff instead

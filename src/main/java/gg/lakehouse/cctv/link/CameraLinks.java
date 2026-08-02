@@ -19,7 +19,6 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -138,22 +137,38 @@ public final class CameraLinks extends SavedData {
         return removed;
     }
 
-    // === Path search: BFS through solid blocks ===
+    // === Path search: A* through solid blocks ===
 
+    /**
+     * A* toward the modem: the search knows both endpoints and spends its
+     * visit budget marching at the target instead of flooding a blind
+     * sphere, so links reach much further through solid terrain. Manhattan
+     * distance never overestimates a 6-neighbour walk, and nodes close on
+     * poll, so the returned path is a shortest one.
+     */
     @Nullable
     private static List<BlockPos> findPath(ServerLevel level, BlockPos from, BlockPos to) {
-        var visited = new HashSet<Long>();
         var cameFrom = new HashMap<Long, Long>();
-        var queue = new ArrayDeque<BlockPos>();
+        var bestCost = new HashMap<Long, Integer>();
+        var closed = new HashSet<Long>();
+        var solidCache = new HashMap<Long, Boolean>();
+        // Entries are {f = cost so far + distance left, position}.
+        var queue = new java.util.PriorityQueue<long[]>((a, b) -> Long.compare(a[0], b[0]));
         for (var direction : Direction.values()) {
             var start = from.relative(direction);
-            if (solid(level, start) && visited.add(start.asLong())) queue.add(start);
+            long key = start.asLong();
+            if (solid(level, start) && !bestCost.containsKey(key)) {
+                bestCost.put(key, 0);
+                queue.add(new long[]{start.distManhattan(to), key});
+            }
         }
-        while (!queue.isEmpty() && visited.size() < MAX_PATH_VISITS) {
-            var at = queue.poll();
+        while (!queue.isEmpty() && closed.size() < MAX_PATH_VISITS) {
+            long key = queue.poll()[1];
+            if (!closed.add(key)) continue;
+            var at = BlockPos.of(key);
             if (at.distManhattan(to) == 1) {
                 var path = new ArrayList<BlockPos>();
-                var walk = at.asLong();
+                var walk = key;
                 while (true) {
                     path.add(BlockPos.of(walk));
                     var previous = cameFrom.get(walk);
@@ -162,11 +177,17 @@ public final class CameraLinks extends SavedData {
                 }
                 return path;
             }
+            int nextCost = bestCost.get(key) + 1;
             for (var direction : Direction.values()) {
                 var next = at.relative(direction);
-                if (!solid(level, next) || !visited.add(next.asLong())) continue;
-                cameFrom.put(next.asLong(), at.asLong());
-                queue.add(next);
+                long nextKey = next.asLong();
+                if (closed.contains(nextKey)) continue;
+                var known = bestCost.get(nextKey);
+                if (known != null && known <= nextCost) continue;
+                if (!solidCache.computeIfAbsent(nextKey, k -> solid(level, next))) continue;
+                bestCost.put(nextKey, nextCost);
+                cameFrom.put(nextKey, key);
+                queue.add(new long[]{nextCost + next.distManhattan(to), nextKey});
             }
         }
         return null;
